@@ -33,3 +33,12 @@ TEXT main·loadsegs(SB), $0
 	MOVL $8, 8(SP)
 	BYTE $0x48 // RETF
 	BYTE $0xCB
+
+TEXT main·outb(SB), $0
+	MOVB data+2(FP), AX
+	MOVW addr+0(FP), DX
+	BYTE $0xEE // OUTB AX, DX
+	RET
+
+TEXT main·halt(SB), $0
+	HLT

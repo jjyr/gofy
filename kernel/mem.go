@@ -52,7 +52,7 @@ var (
 	tmppage [NUMTMPPAGES]tempPage
 	tmppt []uint64
 	gdt []uint64
-	heapstart, heapend uintptr
+	heap []uint32
 )
 
 func invlpg(uintptr)
@@ -108,6 +108,9 @@ func processe820() {
 		}
 		cont:
 	}
+	if size < 16777216 {
+		fuck("Sorry, GOFY doesn't run on toasters")
+	}
 	putnum((size + 524288) / 1048576, 10)
 	puts(" MB memory\n")
 }
@@ -131,6 +134,11 @@ func initframes() {
 	e820map[e820num+1] = [3]uint64{uint64(kernelstart), highest - uint64(kernelstart), E820RSVD}
 	e820num += 2
 	processe820()
+
+	heaph := (*SliceHeader)(unsafe.Pointer(&heap))
+	heaph.Data = (uintptr(highest) + 0xFFFFF) & (max64 ^ 0xFFFFF)
+	heaph.Len = 0
+	heaph.Cap = 0
 }
 
 func initpaging() {
@@ -321,4 +329,109 @@ func mappage(v uintptr, p Phys, flags uint64) {
 	pt[npage] = uint64(p) | flags
 	invlpg(v)
 	return
+}
+
+func printheap() {
+	heaph := (*SliceHeader)(unsafe.Pointer(&heap))
+	for i := 0; i < len(heap); {
+		len := heap[i]
+		if len & 1 != 0 {
+			putc('X')
+		} else {
+			putc('O')
+		}
+		putc(' ')
+		putnum(uint64(heaph.Data) + uint64(i+1) * 4, 16)
+		putc(' ')
+		putnum(uint64(len & (max32 ^ 7)), 16)
+		if heap[i] != heap[i+int(len)/4+1] {
+			puts(" !!! CORRUPTED ")
+			putnum(uint64(heap[i]), 16)
+			puts(" != ")
+			putnum(uint64(heap[i+int(len)/4+1]), 16)
+		}
+		putc(10)
+		i += int(2 + len/4)
+	}
+}
+
+/*
+	heap format:
+	len (dword), data, len (dword)
+	the second len is used both for consistency checking and walking backwards
+	objects larger than 4 GB shouldn't be placed on the stack
+	the length is qword-aligned
+	this function is guaranteed to suck
+*/
+
+func kmalloc(size uintptr) uintptr {
+	if size == 0 {
+		return 0
+	}
+	if size+7 > max32 {
+		fuck("kmalloc called with too large argument (>4GB)")
+	}
+	heaph := (*SliceHeader)(unsafe.Pointer(&heap))
+	N := uint32((size + 7) & (max64 ^ 7))
+	for i := 0; i < len(heap); {
+		len := heap[i]
+		if len & 1 == 0 && len >= N {
+			if len <= N+8 {
+				heap[i] |= 1
+				heap[i+int(len)/4+1] |= 1
+			} else {
+				heap[i] = N | 1
+				heap[i+int(N)/4+1] = N | 1
+				heap[i+int(N)/4+2] = len - N - 8
+				heap[i+int(len)/4+1] = len - N - 8
+			}
+			return heaph.Data + uintptr(i+1)*4
+		}
+		i += int(2 + len / 4)
+	}
+	npages := (N + 8 + (PAGESIZE-1)) / PAGESIZE
+	nf := falloc(uint64(npages))
+	for i := uintptr(0); i < uintptr(npages); i++ {
+		mappage(uintptr(heaph.Data) + uintptr(heaph.Len) * 4 + i * PAGESIZE, nf + Phys(i) * PAGESIZE, PAGEAVAIL | PAGEWRITE)
+	}
+	i := uint32(heaph.Len)
+	heaph.Len += int(npages * PAGESIZE / 4)
+	heaph.Cap = heaph.Len
+	heap[i] = N | 1
+	heap[i+(N/4)+1] = N | 1
+	heap[i+(N/4)+2] = npages * PAGESIZE - N - 16
+	heap[i + npages * 1024 - 1] = heap[i + (N/4) + 2]
+	return heaph.Data + uintptr(i+1) * 4
+}
+
+func kfree(p uintptr) {
+	heaph := (*SliceHeader)(unsafe.Pointer(&heap))
+	if p < heaph.Data && p >= heaph.Data + uintptr(heaph.Len) * 4 || p & 3 != 0 {
+		fuck("kfree called with invalid pointer")
+	}
+	i := uint32((p - heaph.Data) / 4 - 1)
+	len := heap[i]
+	if len & 1 == 0 {
+		fuck("double kfree")
+	}
+	if len != heap[i+len/4+1] {
+		fuck("kernel heap corruption")
+	}
+	heap[i] &= max32 ^ 1
+	heap[i+len/4+1] &= max32 ^ 1
+	if i > 0 {
+		prev := i - heap[i-1] / 4 - 2
+		if heap[prev] & 1 == 0 {
+			heap[prev] += heap[i] + 8
+			heap[i+len/4+1] = heap[prev]
+			i = prev
+		}
+	}
+	next := i + heap[i]/4 + 2
+	if next < uint32(heaph.Len) {
+		if heap[next] & 1 == 0 {
+			heap[i] += heap[next] + 8
+			heap[next+heap[next]/4+1] = heap[i]
+		}
+	}
 }
