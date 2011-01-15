@@ -9,7 +9,8 @@ GOFILES=\
 	main.go\
 	console.go\
 	cp437.go\
-	frame.go\
+	mem.go\
+	interrupt.go\
 
 LD+= -H 2 -s -T0x100000
 PREREQ+=boot

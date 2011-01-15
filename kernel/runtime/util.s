@@ -22,6 +22,16 @@ TEXT main·lgdt(SB), $10
 	BYTE $0x24
 	RET
 
+TEXT main·lidt(SB), $10
+	MOVQ addr+0(FP), AX
+	MOVQ AX, 2(SP)
+	MOVW $4096, 0(SP)
+	BYTE $0x0F // LIDT (SP)
+	BYTE $0x01
+	BYTE $0x1C
+	BYTE $0x24
+	RET
+
 TEXT main·loadsegs(SB), $0
 	MOVL $16, BX
 	MOVW BX, DS
@@ -42,3 +52,64 @@ TEXT main·outb(SB), $0
 
 TEXT main·halt(SB), $0
 	HLT
+
+TEXT main·cli(SB), $0
+	CLI
+	RET
+
+TEXT main·sti(SB), $0
+	STI
+	RET
+
+TEXT main·commonisraddr(SB), $0
+	MOVQ $main·common_isr(SB), 8(SP)
+	RET
+
+TEXT main·common_isr(SB), $0
+	SUBQ $144, SP
+	MOVQ AX, 0(SP)
+	MOVQ CX, 8(SP)
+	MOVQ DX, 16(SP)
+	MOVQ BX, 24(SP)
+	MOVQ SP, 32(SP)
+	MOVQ BP, 40(SP)
+	MOVQ SI, 48(SP)
+	MOVQ DI, 56(SP)
+	MOVQ R8, 64(SP)
+	MOVQ R9, 72(SP)
+	MOVQ R10, 80(SP)
+	MOVQ R11, 88(SP)
+	MOVQ R12, 96(SP)
+	MOVQ R13, 104(SP)
+	MOVQ R14, 112(SP)
+	MOVQ R15, 120(SP)
+	MOVW DS, BX
+	MOVQ BX, 128(SP)
+	MOVQ CR2, BX
+	MOVQ BX, 136(SP)
+	MOVQ 144(SP), AX
+	SHLQ $3, AX
+	ADDQ $main·inthandler(SB), AX
+	CALL *(AX)
+	MOVQ 128(SP), BX
+	MOVW BX, DS
+	MOVW BX, ES
+	MOVW BX, FS
+	MOVW BX, GS
+	MOVQ 0(SP), AX
+	MOVQ 8(SP), CX
+	MOVQ 16(SP), DX
+	MOVQ 24(SP), BX
+	MOVQ 40(SP), BP
+	MOVQ 48(SP), SI
+	MOVQ 56(SP), DI
+	MOVQ 64(SP), R8
+	MOVQ 72(SP), R9
+	MOVQ 80(SP), R10
+	MOVQ 88(SP), R11
+	MOVQ 96(SP), R12
+	MOVQ 104(SP), R13
+	MOVQ 112(SP), R14
+	MOVQ 120(SP), R15
+	ADDQ $144, SP
+	BYTE $0xCF
