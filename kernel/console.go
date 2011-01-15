@@ -15,7 +15,7 @@ type SliceHeader struct {
 	Cap  int
 }
 
-func consoleinit() {
+func initconsole() {
 	h := (*SliceHeader)(unsafe.Pointer(&vram))
 	h.Data = 0xB8000
 	h.Len = 80*25
@@ -36,16 +36,25 @@ func putc(c int) {
 	}
 }
 
-func putnum(l uint64) {
+func putnum_(l uint64, base int, first bool) {
 	if l != 0 {
-		putnum(l>>4)
+		putnum_(l / uint64(base), base, false)
+	} else {
+		if first {
+			putc('0')
+		}
+		return
 	}
-	l &= 15
+	l %= uint64(base)
 	if l > 9 {
 		putc(int(l) + 'A' - 10)
 	} else {
 		putc(int(l) + '0')
 	}
+}
+
+func putnum(l uint64, base int) {
+	putnum_(l, base, true)
 }
 
 func puts(s string) {
@@ -58,4 +67,10 @@ func fuck(s string) {
 	puts("SHIT IS BROKEN\n")
 	puts(s)
 	for {}
+}
+
+func printf(s string, opt ...interface{}) {
+	for _, v := range s {
+		putc(v)
+	}
 }

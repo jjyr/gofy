@@ -13,6 +13,7 @@ OFILES=\
 	rt0.6\
 	morestack.6\
 	string.6\
+	util.6\
 
 GC+= -+
 

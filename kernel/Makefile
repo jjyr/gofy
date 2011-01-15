@@ -14,8 +14,6 @@ GOFILES=\
 LD+= -H 2 -s -T0x100000
 PREREQ+=boot
 
-include $(GOROOT)/src/Make.cmd
-
 image: boot kernel
 	cat boot kernel > image
 
@@ -25,3 +23,5 @@ boot: boot.asm
 .PHONY: run
 run: image
 	qemu-system-x86_64 -fda image
+
+include $(GOROOT)/src/Make.cmd
