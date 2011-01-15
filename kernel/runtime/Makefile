@@ -7,6 +7,7 @@ TARG=runtime
 GOFILES=\
 	runtime.go\
 	type.go\
+	panics.go\
 
 OFILES=\
 	rt0.6\

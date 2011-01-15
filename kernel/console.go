@@ -53,3 +53,9 @@ func puts(s string) {
 		putc(v)
 	}
 }
+
+func fuck(s string) {
+	puts("SHIT IS BROKEN\n")
+	puts(s)
+	for {}
+}

@@ -9,8 +9,9 @@ GOFILES=\
 	main.go\
 	console.go\
 	cp437.go\
+	frame.go\
 
-LD+= -H 2 -s -T0x10000
+LD+= -H 2 -s -T0x100000
 PREREQ+=boot
 
 include $(GOROOT)/src/Make.cmd

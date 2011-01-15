@@ -1,25 +1,41 @@
+; PML4 0x80000
+; PDP 0x81000
+; PD 0x82000
+; GDT 0x83000
+
+drive equ 0x500
+count equ 0x501
+highest equ 0x502
+memmap equ 0x600
+loader equ 0x7C00
+kernel equ 0x10000
+
+AOUTMAGIC equ 0x978a0000
+E820MAGIC equ 0x534D4150
+
+firstPML4 equ 0x8100F
+firstPDP equ 0x8200F
+firstPD equ 0x18F
+codeseg equ (1<<15) | (1<<21) | (1<<12) | (1<<11)
+dataseg equ (1<<15) | (1<<12) | (1<<9)
+
 bits 16
-org 0x7C00
+org loader
 _start:
 	cli
 	xor bx, bx
 	mov ds, bx
 	mov ss, bx
-	mov bx, 0x07E0
+	mov bx, kernel/0x10
 	mov es, bx
-	mov sp, 0x7C00
+	mov sp, loader
 	mov [drive], dl
-
-	mov eax, 0x80000001
-	cpuid
-	test edx, 1<<29
-	jz nolongmode
 
 	mov byte [count], 1
 	call readblock
 	
 	mov eax, [es:0]
-	cmp eax, 0x978a0000
+	cmp eax, AOUTMAGIC 
 	jne wrongmagic
 
 	mov eax, [es:4]
@@ -34,6 +50,29 @@ _start:
 	mov byte [count], al
 	call readblock
 
+	mov bx, memmap/0x10
+	mov es, bx
+	xor ebx, ebx
+	mov dword [es:0], ebx
+	mov di, 8
+	mov edx, E820MAGIC 
+	mov eax, 0xE820
+	mov ecx, 24
+	int 0x15
+	jc e820error
+	cmp eax, E820MAGIC 
+	jnz e820error
+e820loop:
+	add di, 24
+	mov eax, 0xE820
+	mov ecx, 24
+	int 0x15
+	jc e820end
+	inc dword [es:0]
+	test ebx, ebx
+	jnz e820loop
+e820end:
+
 	in al, 0x92
 	or al, 0x02
 	out 0x92, al
@@ -42,12 +81,14 @@ _start:
 	mov es, bx
 	xor di, di
 	xor al, al
-	mov cx, 0x3000
+	mov cx, 0x4000
 	rep stosb
 	
 	mov dword [es:0x0000], firstPML4
 	mov dword [es:0x1000], firstPDP
 	mov dword [es:0x2000], firstPD
+	mov dword [es:0x300C], codeseg
+	mov dword [es:0x3014], dataseg
 
 	mov eax, 0x80000
 	mov cr3, eax
@@ -84,69 +125,35 @@ readblock:
 .iodone:
 	ret
 .ioerror:
-	mov si, iomsg
-	jmp error
-
-
-putstr:
+	xchg al, ah
+	add al, '0'
 	mov ah, 0xE
-	mov bx, 0
-	cld
-.loop:
-	lodsb
-	test al, al
-	jz .end
+	mov bx, 0x7
 	int 0x10
-	jmp .loop
-.end:
-	ret
-
-nolongmode:
-	mov si, nolongmsg
+	mov al, 'I'
 	jmp error
 
 wrongmagic:
-	mov si, nomagicmsg
+	mov al, 'M'
 	jmp error
 
 toolarge:
-	mov si, toolargemsg
+	mov al, 'L'
+	jmp error
+
+e820error:
+	mov al, 'E'
 	jmp error
 
 error:
-	call putstr
-.L1:
-	cli
-	hlt
-	jmp .L1
-
-
-nolongmsg:	db "No AMD64", 13, 10, 0
-nomagicmsg:	db "Magic", 13, 10, 0
-toolargemsg:	db "Too large", 13, 10, 0
-iomsg:		db "I/O", 13, 10, 0
-drive equ 0x500
-count equ 0x501
-loc equ 0x502
-
-; PML4 0x80000
-; PDP 0x81000
-; PD 0x82000
-
-firstPML4 equ 0x8100F
-firstPDP equ 0x8200F
-firstPD equ 0x18F
-
-gdt:
-	dq 0
-	dd 0
-	dd (1<<15) | (1<<21) | (1<<12) | (1<<11)
-	dd 0
-	dd (1<<15) | (1<<12) | (1<<9)
+	mov ah, 0xE
+	mov bx, 0x7
+	int 0x10
+	jmp $
 
 gdtptr:
 	dw 24
-	dq gdt
+	dq 0x83000
 
 bits 64
 LongMode:
@@ -159,22 +166,23 @@ LongMode:
 	mov ss, bx
 	mov rsp, 0x7C00
 
-	mov ecx, [0x7E04] ; text size
+	mov ecx, [kernel + 0x04] ; text size
 	bswap ecx
-	mov rsi, 0x7E28
-	mov rdi, 0x10000
+	mov rsi, kernel + 0x28
+	mov rdi, 0x100000
 	rep movsb
 	add rdi, 4095
 	and rdi, ~4095
-	mov ecx, [0x7E08] ; data size
+	mov ecx, [kernel + 0x08] ; data size
 	bswap ecx
 	rep movsb
-	mov ecx, [0x7E0C] ; bss size
+	mov ecx, [kernel + 0x0C] ; bss size
 	bswap ecx
 	xor al, al
 	rep stosb
+	mov [highest], rdi
 	xor rax, rax
-	mov eax, [0x7E14] ; entry point
+	mov eax, [kernel + 0x14] ; entry point
 	bswap eax
 	jmp rax
 
