@@ -1,3 +1,7 @@
+#define GSBASE 0xC0000101
+#define STACKFLAGS 3
+#define STACK 0x80000
+
 TEXT main·invlpg(SB), $0
 	MOVQ 8(SP), AX
 	BYTE $0x0F // INVLPG (AX)
@@ -62,14 +66,17 @@ TEXT main·sti(SB), $0
 	RET
 
 TEXT main·memzero(SB), $0
-	MOVQ addr+0(FP), AX
-	MOVQ size+8(FP), BX
-	XORQ CX, CX
-zeroloop:
-	MOVB CX, (AX)
-	INCQ AX
-	DECQ BX
-	JNZ zeroloop
+	MOVQ addr+0(FP), DI
+	MOVQ size+8(FP), CX
+	XORQ AX, AX
+	REP; STOSB
+	RET
+
+TEXT main·memcpy(SB), $0
+	MOVQ dst+0(FP), DI
+	MOVQ src+8(FP), SI
+	MOVQ n+16(FP), CX
+	REP; MOVSB
 	RET
 
 TEXT main·commonisraddr(SB), $0
@@ -98,16 +105,16 @@ TEXT main·common_isr(SB), $0
 	MOVQ BX, 128(SP)
 	MOVQ CR2, BX
 	MOVQ BX, 136(SP)
-	MOVL 0xC0000101, CX
+	MOVL $GSBASE, CX
 	RDMSR
 	MOVL AX, 144(SP)
-	MOVL DX, 152(SP)
+	MOVL DX, 148(SP)
 	// FIXME read proper GS
 	MOVQ 152(SP), AX
 	SHLQ $3, AX
 	ADDQ $main·inthandler(SB), AX
 	CALL *(AX)
-	MOVL 0xC0000101, CX
+	MOVL $GSBASE, CX
 	MOVL 144(SP), AX
 	MOVL 152(SP), DX
 	WRMSR
@@ -145,3 +152,45 @@ TEXT runtime·new(SB), $16
 	MOVQ AX, 8(SP)
 	CALL main·memzero(SB)
 	RET
+
+TEXT main·savu(SB), $0
+	MOVQ c+0(FP), BX
+	MOVQ (SP), DI
+	ADDQ $8, SP
+	MOVQ SP, (BX)
+	MOVL $GSBASE, CX
+	RDMSR
+	MOVL AX, 8(BX)
+	MOVL DX, 12(BX)
+	JMP *DI
+
+TEXT main·retu(SB), $0
+	MOVQ (SP), SI
+	MOVQ c+0(FP), DI
+	MOVQ (DI), SP
+	MOVL 8(DI), AX
+	MOVL 12(DI), DX
+	MOVL $GSBASE, CX
+	WRMSR
+
+	MOVQ $main·curstack(SB), BX
+	MOVQ 16(DI), AX
+	ORQ $STACKFLAGS, AX
+	MOVQ AX, (BX)
+	MOVQ 8(DI), AX
+	ORQ $STACKFLAGS, AX
+	MOVQ AX, 8(BX)
+
+/*
+	MOVQ $(STACK-1), AX
+	BYTE $0x0F // INVLPG (AX)
+	BYTE $0x01
+	BYTE $0x38
+	MOVQ $STACK, AX
+	BYTE $0x0F // INVLPG (AX)
+	BYTE $0x01
+	BYTE $0x38
+*/
+	MOVQ CR3, AX
+	MOVQ AX, CR3
+	JMP *SI

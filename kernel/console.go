@@ -83,14 +83,9 @@ func puts(s string) {
 func fuck(s string) {
 	puts("SHIT IS BROKEN\n")
 	puts(s)
+	putc(10)
 	cli()
 	for {
 		halt()
-	}
-}
-
-func printf(s string, opt ...interface{}) {
-	for _, v := range s {
-		putc(v)
 	}
 }

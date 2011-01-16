@@ -1,5 +1,10 @@
+// physical location of the proc 0 stack AND virtual location of all stacks
+#define STACK 0x80000
+
 TEXT _rt0_amd64_gofykernel(SB), 7, $0
-	PUSHQ $runtime·tls0(SB)
+	MOVQ $STACK, SP
+
+	PUSHQ $STACK
 	CALL runtime·setgs(SB)
 	ADDQ $8, SP
 
@@ -24,5 +29,3 @@ TEXT runtime·fuck(SB), 7, $16
 	MOVL AX, 8(SP)
 	CALL main·fuck(SB)
 	RET
-
-GLOBL runtime·tls0(SB), $64

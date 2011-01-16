@@ -5,5 +5,9 @@ func main() {
 	initframes()
 	initpaging()
 	initinterrupts()
-	puts("GOFY\n\n")
+	puts("GOFY\n")
+	initproc()
+	a := procreate()
+	putnum(a, 10)
+	swtch()
 }

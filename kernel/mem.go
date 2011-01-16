@@ -22,6 +22,8 @@ const (
 	MAXE820       = 100   // maximum number of E820 entries
 	PAGESIZE      = 4096
 	TMPPAGES      uintptr = 0x40000000 // if you change this number you also need to change initpaging()
+	STACK uintptr = 0x80000 // this number also appears in runtime/rt0.s and has to be page-aligned
+	// STACK is also the location of the TLS
 	PAGETABLESIZE = 512
 	NUMTMPPAGES   = 256
 	PAGEAVAIL     uint64 = 1
@@ -53,12 +55,15 @@ var (
 	tmppt   []uint64
 	gdt     []uint64
 	heap    []uint32
+	curstack *uint64
 )
 
 func invlpg(uintptr)
 func setcr3([]uint64)
 func lgdt([]uint64)
 func loadsegs()
+func memzero(uintptr, uint64)
+func memcpy(dst uintptr, src uintptr, n uint64)
 
 func pageroundup(n uint64) uint64 {
 	return (n + PAGESIZE - 1) & (max64 ^ (PAGESIZE - 1))
@@ -126,13 +131,14 @@ func initframes() {
 
 	mh := (*SliceHeader)(unsafe.Pointer(&e820map))
 	mh.Data = 0x608
-	mh.Len = e820num + 2
+	mh.Len = e820num + 3
 	mh.Cap = mh.Len
 	e820map[e820num] = [3]uint64{0, 0x1000, E820RSVD}
 	highest := *(*uint64)(unsafe.Pointer(uintptr(0x502)))
 	highest = pageroundup(highest)
 	e820map[e820num+1] = [3]uint64{uint64(kernelstart), highest - uint64(kernelstart), E820RSVD}
-	e820num += 2
+	e820map[e820num+2] = [3]uint64{uint64(STACK) - PAGESIZE, 2*PAGESIZE, E820RSVD}
+	e820num += 3
 	processe820()
 
 	heaph := (*SliceHeader)(unsafe.Pointer(&heap))
@@ -178,6 +184,7 @@ func initpaging() {
 	for i = 0; i < 512; i++ {
 		*(*uint64)(unsafe.Pointer(uintptr(pt0) + 8*i)) = (uint64(PAGESIZE * i)) | PAGEAVAIL | PAGEWRITE
 	}
+	curstack = (*uint64)(unsafe.Pointer(uintptr(pt0) + 8*((STACK-1)/PAGESIZE)))
 	setcr3(pml4)
 }
 
@@ -257,7 +264,7 @@ func tmpmap(p Phys) (v uintptr) {
 }
 
 func tmpfree(v uintptr) {
-	if v < TMPPAGES || v >= TMPPAGES+NUMTMPPAGES {
+	if v < TMPPAGES || v >= TMPPAGES+NUMTMPPAGES*PAGESIZE {
 		fuck("tmpfree called with invalid address")
 	}
 	v = (v - TMPPAGES) / PAGESIZE
@@ -328,6 +335,9 @@ func mappage(v uintptr, p Phys, flags uint64) {
 
 	pt[npage] = uint64(p) | flags
 	invlpg(v)
+	tmpfree(uintptr(unsafe.Pointer(pdp)))
+	tmpfree(uintptr(unsafe.Pointer(pd)))
+	tmpfree(uintptr(unsafe.Pointer(pt)))
 	return
 }
 
@@ -359,7 +369,7 @@ func printheap() {
 	heap format:
 	len (dword), data, len (dword)
 	the second len is used both for consistency checking and walking backwards
-	objects larger than 4 GB shouldn't be placed on the stack
+	objects larger than 4 GB shouldn't be placed on the heap
 	the length is qword-aligned
 	this function is guaranteed to suck
 */
@@ -392,7 +402,12 @@ func kmalloc(size uintptr) uintptr {
 	npages := (N + 8 + (PAGESIZE - 1)) / PAGESIZE
 	nf := falloc(uint64(npages))
 	for i := uintptr(0); i < uintptr(npages); i++ {
-		mappage(uintptr(heaph.Data)+uintptr(heaph.Len)*4+i*PAGESIZE, nf+Phys(i)*PAGESIZE, PAGEAVAIL|PAGEWRITE)
+// the region just below the stack is unmapped to prevent weird things from happening if the stack grows too large
+		if i != (STACK - 1 - PAGESIZE) / PAGESIZE {
+			mappage(uintptr(heaph.Data)+uintptr(heaph.Len)*4+i*PAGESIZE, nf+Phys(i)*PAGESIZE, PAGEAVAIL|PAGEWRITE)
+		} else {
+			mappage(uintptr(heaph.Data)+uintptr(heaph.Len)*4+i*PAGESIZE, 0, 0)
+		}
 	}
 	i := uint32(heaph.Len)
 	heaph.Len += int(npages * PAGESIZE / 4)

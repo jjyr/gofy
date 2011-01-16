@@ -11,9 +11,15 @@ GOFILES=\
 	cp437.go\
 	mem.go\
 	interrupt.go\
+	proc.go\
 
-LD+= -H 2 -s -T0x100000
+LD+= -H 2 -T0x100000
 PREREQ+=boot
+
+all: image
+
+kernel.elf: _go_.6
+	6l -H 7 -T0x100000 -o $@ $<
 
 image: boot kernel
 	cat boot kernel > image
@@ -23,7 +29,7 @@ boot: boot.asm
 
 .PHONY: gofmt
 gofmt:
-	( for i in $(GOFILES); do gofmt $$i > /tmp/a; mv /tmp/a $$i; done )
+	( for i in $(GOFILES); do gofmt -w $$i; done )
 
 .PHONY: run rund
 run: image

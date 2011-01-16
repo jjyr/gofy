@@ -8,6 +8,9 @@ GOFILES=\
 	runtime.go\
 	type.go\
 	panics.go\
+	runtime_defs.go\
+	hashmap_defs.go\
+	chan_defs.go\
 
 OFILES=\
 	rt0.6\

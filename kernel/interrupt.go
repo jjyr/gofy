@@ -22,7 +22,15 @@ func cli()
 func sti()
 func commonisraddr() uintptr
 
+type StringHeader struct {
+	Data uintptr
+	Len  int
+}
+
+
 func int_unknown(st intstate) {
+	putnum(st.no, 10)
+	putc(10)
 	fuck("unknown interrupt")
 }
 
@@ -32,6 +40,10 @@ func int_pagefault(st intstate) {
 
 func int_gpf(st intstate) {
 	fuck("general protection fault")
+}
+
+func int_invalid(st intstate) {
+	fuck("invalid instruction")
 }
 
 func initinterrupts() {
@@ -67,6 +79,7 @@ func initinterrupts() {
 		inthandler[j] = int_unknown
 	}
 
+	inthandler[0x6] = int_invalid
 	inthandler[0xD] = int_gpf
 	inthandler[0xE] = int_pagefault
 
