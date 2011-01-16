@@ -21,8 +21,15 @@ image: boot kernel
 boot: boot.asm
 	nasm -f bin $< -o $@
 
-.PHONY: run
+.PHONY: gofmt
+gofmt:
+	( for i in $(GOFILES); do gofmt $$i > /tmp/a; mv /tmp/a $$i; done )
+
+.PHONY: run rund
 run: image
 	qemu-system-x86_64 -fda image
+
+rund: image
+	qemu-system-x86_64 -fda image -d in_asm,int,cpu -no-reboot
 
 include $(GOROOT)/src/Make.cmd

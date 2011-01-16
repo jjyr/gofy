@@ -5,7 +5,7 @@ import (
 )
 
 var (
-	vram []uint16
+	vram               []uint16
 	consolex, consoley int
 )
 
@@ -21,7 +21,7 @@ func halt()
 func initconsole() {
 	h := (*SliceHeader)(unsafe.Pointer(&vram))
 	h.Data = 0xB8000
-	h.Len = 80*25
+	h.Len = 80 * 25
 	h.Cap = h.Len
 	for i := 0; i < 80*25; i++ {
 		vram[i] = 0x0F00
@@ -38,7 +38,7 @@ func putc(c int) {
 			for i := 0; i < 80*24; i++ {
 				vram[i] = vram[i+80]
 			}
-			for i := 80*24; i < 80*25; i++ {
+			for i := 80 * 24; i < 80*25; i++ {
 				vram[i] = 0x0F00
 			}
 		}
@@ -46,7 +46,7 @@ func putc(c int) {
 		vram[consolex+consoley*80] = 0x0F00 | uint16(tocp437(c))
 		consolex++
 	}
-	p := consolex + consoley * 80
+	p := consolex + consoley*80
 	outb(0x3D4, 0x0F)
 	outb(0x3D5, byte(p))
 	outb(0x3D4, 0x0E)
@@ -55,7 +55,7 @@ func putc(c int) {
 
 func putnum_(l uint64, base int, first bool) {
 	if l != 0 {
-		putnum_(l / uint64(base), base, false)
+		putnum_(l/uint64(base), base, false)
 	} else {
 		if first {
 			putc('0')
@@ -83,6 +83,7 @@ func puts(s string) {
 func fuck(s string) {
 	puts("SHIT IS BROKEN\n")
 	puts(s)
+	cli()
 	for {
 		halt()
 	}

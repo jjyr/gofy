@@ -3,14 +3,17 @@ package main
 import "unsafe"
 
 type intstate struct {
-	ax, cx, dx, bx, sp, bp, si, di, r8, r9, r10, r11, r12, r13, r14, r15, ds, cr2 uint64
+	ax, cx, dx, bx, sp, bp, si, di uint64
+	r8, r9, r10, r11, r12, r13, r14, r15 uint64
+	ds, cr2, gs uint64
+	no, error, ip, cs, flags, usersp, ss uint64
 }
 
 type InterruptHandler func(intstate)
 
 var (
-	idt []uint64
-	asmhandler [256*16]byte
+	idt        []uint64
+	asmhandler [256 * 16]byte
 	inthandler [256]InterruptHandler
 )
 
@@ -63,7 +66,7 @@ func initinterrupts() {
 		idt[j*2+1] = off >> 32
 		inthandler[j] = int_unknown
 	}
-	
+
 	inthandler[0xD] = int_gpf
 	inthandler[0xE] = int_pagefault
 

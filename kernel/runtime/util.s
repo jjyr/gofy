@@ -1,8 +1,8 @@
 TEXT main·invlpg(SB), $0
 	MOVQ 8(SP), AX
-	BYTE $0x0F
+	BYTE $0x0F // INVLPG (AX)
 	BYTE $0x01
-	BYTE $0x38 // INVLPG (AX)
+	BYTE $0x38
 	RET
 
 TEXT main·setcr3(SB), $0
@@ -61,12 +61,23 @@ TEXT main·sti(SB), $0
 	STI
 	RET
 
+TEXT main·memzero(SB), $0
+	MOVQ addr+0(FP), AX
+	MOVQ size+8(FP), BX
+	XORQ CX, CX
+zeroloop:
+	MOVB CX, (AX)
+	INCQ AX
+	DECQ BX
+	JNZ zeroloop
+	RET
+
 TEXT main·commonisraddr(SB), $0
 	MOVQ $main·common_isr(SB), 8(SP)
 	RET
 
 TEXT main·common_isr(SB), $0
-	SUBQ $144, SP
+	SUBQ $152, SP
 	MOVQ AX, 0(SP)
 	MOVQ CX, 8(SP)
 	MOVQ DX, 16(SP)
@@ -87,10 +98,19 @@ TEXT main·common_isr(SB), $0
 	MOVQ BX, 128(SP)
 	MOVQ CR2, BX
 	MOVQ BX, 136(SP)
-	MOVQ 144(SP), AX
+	MOVL 0xC0000101, CX
+	RDMSR
+	MOVL AX, 144(SP)
+	MOVL DX, 152(SP)
+	// FIXME read proper GS
+	MOVQ 152(SP), AX
 	SHLQ $3, AX
 	ADDQ $main·inthandler(SB), AX
 	CALL *(AX)
+	MOVL 0xC0000101, CX
+	MOVL 144(SP), AX
+	MOVL 152(SP), DX
+	WRMSR
 	MOVQ 128(SP), BX
 	MOVW BX, DS
 	MOVW BX, ES
@@ -111,5 +131,17 @@ TEXT main·common_isr(SB), $0
 	MOVQ 104(SP), R13
 	MOVQ 112(SP), R14
 	MOVQ 120(SP), R15
-	ADDQ $144, SP
+	ADDQ $152, SP
 	BYTE $0xCF
+
+TEXT runtime·new(SB), $16
+	MOVQ n+0(FP), AX
+	MOVQ AX, 0(SP)
+	CALL main·kmalloc(SB)
+	MOVQ 8(SP), AX
+	MOVQ AX, addr+8(FP)
+	MOVQ AX, 0(SP)
+	MOVQ n+0(FP), AX
+	MOVQ AX, 8(SP)
+	CALL main·memzero(SB)
+	RET
