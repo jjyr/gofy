@@ -4,6 +4,7 @@
 
 #include "amd64/asm.h"
 
+/*
 TEXT _rt0_amd64(SB),7,$-8
 	// copy arguments forward on an even stack
 	MOVQ	0(DI), AX		// argc
@@ -19,6 +20,7 @@ TEXT _rt0_amd64(SB),7,$-8
 	JZ	needtls
 	CALL	AX
 	JMP ok
+
 
 needtls:
 	LEAQ	runtime·tls0(SB), DI
@@ -70,6 +72,7 @@ ok:
 
 	CALL	runtime·notok(SB)		// never returns
 	RET
+*/
 
 TEXT runtime·mainstart(SB),7,$0
 	CALL	main·init(SB)
