@@ -10,6 +10,7 @@ type SliceHeader struct {
 	Cap  int
 }
 
+func cleartlb()
 
 /*
 	the whole address space is 256 TB
@@ -28,26 +29,27 @@ const (
 	E820RSVD      uint64  = 2
 	MAXE820       = 100   // maximum number of E820 entries
 	PAGESIZE      = 4096
+	LARGEPSIZE    = 2097152
 	PAGETABLESIZE = 512
 	PAGEAVAIL     uint64 = 1
 	PAGEWRITE     uint64 = 2
+	PAGELARGE     uint64 = 0x80
 	ANTIPAGE      = max32 ^ (PAGESIZE - 1)
 )
 
 type coreMapEntry struct {
-	addr uint64
-	size uint64
+	start uint64
+	end   uint64
+	virtual uintptr
 }
 
 var (
-	e820map [][3]uint64
-	e820num int
-	coremap [COREMAPSIZE]coreMapEntry
-	pml4    []uint64
-	tmppt   []uint64
-	gdt     []uint64
-	heap    []uint32
-	curstack *uint64
+	e820map  [][3]uint64
+	e820num  int
+	coremap  [COREMAPSIZE]coreMapEntry
+	cmsize int
+	memsize  uint64
+	maxvirtaddr uintptr
 )
 
 func pageroundup(n uint64) uint64 {
@@ -77,8 +79,8 @@ func processe820() {
 			}
 		}
 	}
-	m := 0
-	size := uint64(0)
+	cmsize = 0
+	memsize := uint64(0)
 	for i := 0; i < k-1; i++ {
 		l := e820limits[i]
 		found := false
@@ -92,17 +94,68 @@ func processe820() {
 			}
 		}
 		if found {
-			coremap[m] = coreMapEntry{addr: l, size: e820limits[i+1] - l}
-			size += e820limits[i+1] - l
-			m++
+			coremap[cmsize] = coreMapEntry{start: l, end: e820limits[i+1]}
+			memsize += e820limits[i+1] - l
+			cmsize++
 		}
 	cont:
 	}
-	if size < 16777216 {
+	coremap[cmsize] = coreMapEntry{}
+	if memsize < 16777216 {
 		fuck("Sorry, GOFY doesn't run on toasters")
 	}
-	print((size+524288)/1048576)
-	println(" MB memory\n")
+	print((memsize + 524288) / 1048576)
+	print(" MB memory\n")
+}
+
+func mapmemory() {
+	pmlo, pdpo, pdo := 0, 0, 1
+	pml := (*[PAGETABLESIZE]uint64)(unsafe.Pointer(uintptr(0x1000)))
+	pdp := (*[PAGETABLESIZE]uint64)(unsafe.Pointer(uintptr(0x2000)))
+	pd := (*[PAGETABLESIZE]uint64)(unsafe.Pointer(uintptr(0x3000)))
+	virtual := uintptr(LARGEPSIZE)
+	physical := uint64(LARGEPSIZE)
+	offset := uintptr(0x4000)
+	k := 0
+	for ; k < cmsize; k++ {
+		if coremap[k].start <= physical && physical < coremap[k].end {
+			goto found
+		}
+	}
+	fuck("E820 error")
+	found:
+	for {
+		pd[pdo] = physical | PAGELARGE | PAGEWRITE | PAGEAVAIL
+		pdo++
+		coremap[k].virtual = virtual
+		if pdo == PAGETABLESIZE {
+			pd = (*[PAGETABLESIZE]uint64)(unsafe.Pointer(offset))
+			pdp[pdpo] = uint64(offset) | PAGEWRITE | PAGEAVAIL
+			offset += PAGESIZE
+			pdpo++
+			if pdpo == PAGETABLESIZE {
+				pdp = (*[PAGETABLESIZE]uint64)(unsafe.Pointer(offset))
+				pml[pmlo] = uint64(offset) | PAGEWRITE | PAGEAVAIL
+				offset += PAGESIZE
+				pmlo++
+			}
+		}
+		virtual += LARGEPSIZE
+		physical += LARGEPSIZE
+		if physical >= coremap[k].end {
+		retry:
+			k++
+			if k >= cmsize {
+				break
+			}
+			physical = coremap[k].start
+			if physical + LARGEPSIZE > coremap[k].end {
+				goto retry
+			}
+		}
+	}
+	maxvirtaddr = virtual
+	cleartlb()
 }
 
 func initmem() {
@@ -116,18 +169,15 @@ func initmem() {
 
 	mh := (*SliceHeader)(unsafe.Pointer(&e820map))
 	mh.Data = 0x608
-	mh.Len = e820num + 2
+	mh.Len = e820num
 	mh.Cap = mh.Len
-	e820map[e820num] = [3]uint64{0, 0x1000, E820RSVD}
-	highest := *(*uint64)(unsafe.Pointer(uintptr(0x502)))
-	highest = pageroundup(highest)
-	e820map[e820num+1] = [3]uint64{uint64(kernelstart), highest - uint64(kernelstart), E820RSVD}
-	e820num += 2
 	processe820()
+	mapmemory()
 }
 
 func fuck(s string) {
 	println("SHIT IS BROKEN")
 	println(s)
-	for {}
+	for {
+	}
 }

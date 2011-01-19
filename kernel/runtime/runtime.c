@@ -70,7 +70,7 @@ runtime·throw(int8 *s)
 {
 	runtime·printf("throw: %s\n", s);
 	runtime·dopanic(0);
-	*(int32*)0 = 0;	// not reached
+	while(1);
 	runtime·exit(1);	// even more not reached
 }
 

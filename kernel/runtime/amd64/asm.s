@@ -435,3 +435,8 @@ TEXT runtime·getcallersp(SB),7,$0
 	RET
 
 GLOBL runtime·tls0(SB), $64
+
+TEXT main·cleartlb(SB),7,$0
+	MOVQ CR3, AX
+	MOVQ AX, CR3
+	RET

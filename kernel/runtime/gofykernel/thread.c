@@ -1,18 +1,9 @@
-// Copyright 2010 The Go Authors.  All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 #include "runtime.h"
 
 int8 *goos = "tiny";
 
 void
 runtime·minit(void)
-{
-}
-
-void
-runtime·osinit(void)
 {
 }
 
@@ -30,6 +21,7 @@ runtime·initsig(int32 queue)
 void
 runtime·exit(int32)
 {
+	main·fuck("exit called", 11);
 	for(;;);
 }
 

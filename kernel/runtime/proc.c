@@ -110,8 +110,8 @@ runtime·schedinit(void)
 	m->nomemprof++;
 
 	runtime·mallocinit();
-	runtime·goargs();
-	runtime·goenvs();
+//	runtime·goargs();
+//	runtime·goenvs();
 
 	// For debugging:
 	// Allocate internal symbol table representation now,

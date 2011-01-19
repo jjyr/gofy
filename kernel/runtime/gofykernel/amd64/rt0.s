@@ -7,6 +7,25 @@
 
 TEXT _rt0_amd64_gofykernel(SB), 7, $0
 	MODE $32
+	CLI
+
+	// parse a.out header and clear bss
+	MOVL (HEADER+4), AX
+	WORD $0xC80F
+	ADDL $4095, AX
+	ANDL $~4095, AX
+	MOVL (HEADER+8), BX
+	WORD $0xCB0F
+	ADDL BX, AX
+	ADDL $HEADER, AX
+	MOVL AX, DI
+	MOVL (HEADER+12), CX
+	WORD $0xC90F
+	XORL AX, AX
+	REP; STOSB
+	MOVL DI, runtime·highest(SB)
+	MOVL $0, runtime·highest+4(SB)
+
 	MOVL $PML4, DI
 	MOVL $0, AX
 	MOVL $0x4000, CX
@@ -53,9 +72,6 @@ TEXT now64(SB), 7, $0
 	MOVQ $0x1000, CX
 	REP; STOSB
 
-	MOVQ $runtime·g0(SB), g(BX)
-	MOVQ $runtime·m0(SB), m(BX)
-	
 	MOVQ $stack0(SB), SP
 	ADDQ $4096, SP
 	MOVQ $stack0(SB), AX
@@ -64,9 +80,27 @@ TEXT now64(SB), 7, $0
 	MOVQ $0xC0000101, CX
 	WRMSR
 
+	MOVQ $runtime·g0(SB), CX
+	MOVQ CX, g(BX)
+	MOVQ $runtime·m0(SB), AX
+	MOVQ AX, m(BX)
+	MOVQ CX, m_g0(AX)
+
+	MOVQ SP, g_stackbase(CX)
+	MOVQ $stack0(SB), g_stackguard(CX)
+
 	CALL runtime·initconsole(SB)
 	CALL main·initmem(SB)
-	HLT
+
+	CALL runtime·schedinit(SB)
+	PUSHQ $runtime·mainstart(SB)
+	PUSHQ $0
+	CALL runtime·newproc(SB)
+	POPQ AX
+	POPQ AX
+	CALL runtime·mstart(SB)
+	CALL runtime·notok(SB)
+	RET
 
 TEXT gdt(SB), 7, $0
 	QUAD $0
@@ -83,7 +117,7 @@ TEXT runtime·notok(SB), 7, $0
 	HLT
 
 TEXT runtime·gettime(SB), 7, $0
-	HLT
+	RET
 
 TEXT runtime·settls(SB), 7, $0
 	HLT
