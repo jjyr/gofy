@@ -587,3 +587,6 @@ int32	runtime·chanlen(Hchan*);
 int32	runtime·chancap(Hchan*);
 
 void	runtime·ifaceE2I(struct InterfaceType*, Eface, Iface*);
+
+void runtime·begincritical(void);
+void runtime·endcritical(void);

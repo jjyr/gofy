@@ -10,6 +10,7 @@ GOFILES=\
 	mem.go\
 
 LD+= -H 2 -T0x100028
+CFLAGS+= -FVw 
 PREREQ+=boot
 
 all: image

@@ -1,5 +1,7 @@
 #include "runtime.h"
 
+extern void* runtime·schedp;
+
 int8 *goos = "tiny";
 
 void
@@ -10,7 +12,6 @@ runtime·minit(void)
 void
 runtime·goenvs(void)
 {
-	runtime·goenvs_unix();
 }
 
 void
@@ -44,6 +45,8 @@ runtime·lock(Lock *l)
 	if(l->key != 0)
 		runtime·throw("deadlock");
 	l->key = 1;
+	if(l == runtime·schedp)
+		runtime·begincritical();
 }
 
 void
@@ -55,6 +58,8 @@ runtime·unlock(Lock *l)
 	if(l->key != 1)
 		runtime·throw("unlock of unlocked lock");
 	l->key = 0;
+	if(l == runtime·schedp)
+		runtime·endcritical();
 }
 
 void 

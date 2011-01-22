@@ -32,6 +32,8 @@ GOFILES=\
 OFILES=\
 	rt0.$O\
 	asm.$O\
+	interrupt.$O\
+	interrupt_s.$O\
 	chan.$O\
 	closure.$O\
 	float.$O\

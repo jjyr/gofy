@@ -73,6 +73,7 @@ struct Sched {
 };
 
 Sched runtime·sched;
+void* runtime·schedp;
 
 // Scheduling helpers.  Sched must be locked.
 static void gput(G*);	// put/get on ghead/gtail
@@ -106,6 +107,7 @@ runtime·schedinit(void)
 	int32 n;
 	byte *p;
 
+	runtime·schedp = &runtime·sched;
 	runtime·allm = m;
 	m->nomemprof++;
 
@@ -352,6 +354,7 @@ nextgandunlock(void)
 void
 runtime·stoptheworld(void)
 {
+	runtime·begincritical();
 	runtime·lock(&runtime·sched);
 	runtime·gcwaiting = 1;
 	runtime·sched.mcpumax = 1;
@@ -379,6 +382,7 @@ runtime·starttheworld(void)
 	runtime·sched.mcpumax = runtime·sched.gomaxprocs;
 	matchmg();
 	runtime·unlock(&runtime·sched);
+	runtime·endcritical();
 }
 
 // Called to start an M.

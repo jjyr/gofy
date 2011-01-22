@@ -1,6 +1,10 @@
 package main
 
+func foo() {
+	for {}
+}
+
 func main() {
-	println("Hello, World")
+	go foo()
 	for {}
 }

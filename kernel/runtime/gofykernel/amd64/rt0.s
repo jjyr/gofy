@@ -91,6 +91,7 @@ TEXT now64(SB), 7, $0
 
 	CALL runtime·initconsole(SB)
 	CALL main·initmem(SB)
+	CALL runtime·initinterrupts(SB)
 
 	CALL runtime·schedinit(SB)
 	PUSHQ $runtime·mainstart(SB)
