@@ -9,7 +9,7 @@ SIZE=64
 
 # TODO(kaib): fix register allocation to honor extern register so we
 # can enable optimizations again.
-CFLAGS=-I$(GOOS) -I$(GOARCH) -I$(GOOS)/$(GOARCH)
+CFLAGS=-I$(GOOS) -I$(GOARCH) -I$(GOOS)/$(GOARCH) -FVw
 
 GOFILES=\
 	console.go\

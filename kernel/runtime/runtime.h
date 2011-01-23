@@ -579,8 +579,8 @@ void	runtime·mapiterkeyvalue(struct hash_iter*, void*, void*);
 Hmap*	runtime·makemap_c(Type*, Type*, int64);
 
 Hchan*	runtime·makechan_c(Type*, int64);
-void	runtime·chansend(Hchan*, void*, bool*);
-void	runtime·chanrecv(Hchan*, void*, bool*);
+void	runtime·chansend(Hchan*, byte*, bool*);
+void	runtime·chanrecv(Hchan*, byte*, bool*);
 void	runtime·chanclose(Hchan*);
 bool	runtime·chanclosed(Hchan*);
 int32	runtime·chanlen(Hchan*);

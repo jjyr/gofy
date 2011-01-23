@@ -10,7 +10,7 @@
 
 enum {
 	COREMAPSIZE   = 512,
-	kernelstart   = 0x100000,
+	KERNELSTART   = 0x100000,
 	E820FREE      = 1,
 	E820RSVD      = 2,
 	MAXE820       = 100,   // maximum number of E820 entries
@@ -21,7 +21,8 @@ enum {
 	PAGEWRITE     = 2,
 	PAGEUSER      = 4,
 	PAGELARGE     = 0x80,
-	ANTIPAGE      = ~(PAGESIZE - 1)
+	ANTIPAGE      = ~(PAGESIZE - 1),
+	PAGETABLESTART = 0xffffc0000000LL,
 };
 
 void main·fuck(int8*, uint32);
@@ -37,8 +38,9 @@ uint32 e820num;
 coreMapEntry coremap[COREMAPSIZE];
 uint32 cmsize;
 uint64 memsize;
-uint64* kernelpml4;
 uint64 e820limits[2 * MAXE820];
+uint64 runtime·highest;
+uint64* pagetables[2];
 
 #define pageroundup(n) (((n) + PAGESIZE - 1) & ~(PAGESIZE - 1))
 
@@ -46,7 +48,7 @@ uint64 e820limits[2 * MAXE820];
 void
 runtime·processe820(void)
 {
-	uint32 i, j, k;
+	uint32 i, j;
 	uint64 *l, *lk, t;
 	bool swapped, found;
 
@@ -78,7 +80,6 @@ runtime·processe820(void)
 	memsize = 0;
 	for(l = e820limits; l < lk-1; l++) {
 		found = false;
-		runtime·printf("%p\n", *l);
 		for(j = 0; j < e820num; j++) {
 			if(*l >= e820map[3*j] && *l < e820map[3*j]+e820map[3*j+1]) {
 				if(e820map[3*j+2] != E820FREE) {
@@ -89,16 +90,21 @@ runtime·processe820(void)
 			}
 		}
 		if(found) {
-			coremap[cmsize].start = *l;
-			coremap[cmsize].end = *(l+1);
-			memsize += *(l+1) - *l;
-			cmsize++;
+			if(cmsize && coremap[cmsize-1].end == *l) {
+				coremap[cmsize-1].end = *(l+1);
+				memsize += *(l+1) - *l;
+			} else {
+				coremap[cmsize].start = *l;
+				coremap[cmsize].end = *(l+1);
+				memsize += *(l+1) - *l;
+				cmsize++;
+			}
 		} 
 	cont: ;
 	}
 	coremap[cmsize].start = 0;
 	coremap[cmsize].end = 0;
-	runtime·printf("%d MB core\n", (memsize + 524288) / 1048576);
+	runtime·printf("%d MB core\n", (uint32)((memsize + 524288) / 1048576));
 	if(memsize < 16777216) {
 		int8 s[] = "Sorry, GOFY doesn't run on toasters";
 		main·fuck(s, sizeof(s));
@@ -107,9 +113,9 @@ runtime·processe820(void)
 
 #pragma textflag 7
 void
-runtime·initmem()
+runtime·SysMemInit()
 {
-	e820num = *(uint32*)(0x600);
+	e820num = *(uint32*)0x600;
 	if(e820num == 0) {
 		int8 s[] = "E820 fucked up";
 		main·fuck(s, sizeof(s));
@@ -118,51 +124,91 @@ runtime·initmem()
 		int8 s[] = "E820 map too large";
 		main·fuck(s, sizeof(s));
 	}
+	e820map[3*e820num+0] = KERNELSTART;
+	e820map[3*e820num+1] = KERNELSTART - runtime·highest;
+	e820map[3*e820num+2] = E820RSVD;
+	e820map[3*e820num+3] = 0;
+	e820map[3*e820num+4] = 0x10000;
+	e820map[3*e820num+5] = E820RSVD;
+	e820num += 2;
 	e820map = (uint64*) 0x608;
 	runtime·processe820();
 }
 
-/*
-func DecodePhys(p Phys) uintptr {
-	if p < LARGEPAGESIZE {
-		return uintptr(p)
-	}
-	for i = 0; i < cmsize; i++ {
-		if p >= Phys(coremap[i].start) && p < Phys(coremap[i].end) {
-			return uintptr(p) - uintptr(coremap[i].start) + coremap[i].virtual
+#pragma textflag 7
+void
+runtime·SysFree()
+{
+}
+
+#pragma textflag 7
+uint64
+falloc(uint64 n)
+{
+	uint32 i;
+	uint64 p;
+
+	if(!n) return 0;
+        for(i = 0; i < cmsize; i++) {
+                if(coremap[i].end - coremap[i].start >= PAGESIZE*n) {
+                        p = coremap[i].start;
+                        coremap[i].start += PAGESIZE * n;
+                        if(coremap[i].start == coremap[i].end) {
+                                i++;
+				cmsize--;
+                                for(; i < cmsize; i++) coremap[i-1] = coremap[i];
+                        }
+                        return p;
+                }
+        }
+	int8 s[] = "out of memory";
+	main·fuck(s, sizeof(s));
+        return 0;
+}
+
+void
+ffree(uint64 p, uint64 n) {
+	uint32 i;
+
+	if(!n) return;
+	for(i = 0; i < cmsize && coremap[i].start <= i; i++);
+	if(i && coremap[i-1].end == p) {
+		coremap[i-1].end += n;
+		if(p+n == coremap[i].start) {
+			coremap[i-1].end = coremap[i].end;
+			i++;
+			cmsize--;
+			for(; i < cmsize; i++) {
+				coremap[i-1] = coremap[i];
+			}
 		}
-	}
-	fuck("DecodePhys: tried accessing unmapped address")
-	return 0xDEADBEEFDEADBEEF
-}
+	} else {
+		if(p+n == coremap[i].start) {
+			coremap[i].start -= n;
+		} else {
+			coreMapEntry *j;
 
-func DecodeVirt(v uintptr) Phys {
-	if v < LARGEPAGESIZE {
-		return Phys(v)
-	}
-	for i = 0; i < cmsize; i++ {
-		if v >= coremap[i].virtual && v < uintptr(coremap[i].end-coremap[i].start)+coremap[i].virtual {
-			return Phys(v) - Phys(coremap[i].virtual) + Phys(coremap[i].start)
+			j = coremap + i;
+			for(; i < cmsize; i++) {
+				coremap[i+1] = coremap[i];
+			}
+			cmsize++;
+			j->start = p;
+			j->end = p+n;
 		}
-	}
-	fuck("DecodeVirt: tried accessing unmapped address")
-	return 0xDEADBEEFDEADBEEF
+        }
 }
 
-func MakeTableSlice(p Phys) (res []uint64) {
-	h = (*SliceHeader)(unsafe.Pointer(&res))
-	h.Data = DecodePhys(p)
-	h.Len = 512
-	h.Cap = 512
-	return
+#pragma textflag 7
+void*
+runtime·SysAlloc(uintptr n)
+{
 }
 
-func AddrDecode(v uintptr) (pdp, pd, pt, page, disp int) {
-	pdp = int((v >> 39) & 0x1FF)
-	pd = int((v >> 30) & 0x1FF)
-	pt = int((v >> 21) & 0x1FF)
-	page = int((v >> 12) & 0x1FF)
-	disp = int(v & (PAGESIZE - 1))
-	return
+uint64*
+runtime·AllocTable(void)
+{
+	uint64 p;
+
+	p = falloc(1);
 }
-*/

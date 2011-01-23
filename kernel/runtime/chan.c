@@ -104,7 +104,7 @@ runtime·makechan_c(Type *elem, int64 hint)
 	}
 
 	c = runtime·mal(sizeof(*c));
-	runtime·addfinalizer(c, destroychan, 0);
+	runtime·addfinalizer(c, (void(*)(void*)) destroychan, 0);
 
 	c->elemsize = elem->size;
 	c->elemalg = &runtime·algarray[elem->alg];

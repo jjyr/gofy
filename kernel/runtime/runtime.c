@@ -71,7 +71,6 @@ runtime·throw(int8 *s)
 	runtime·printf("throw: %s\n", s);
 	runtime·dopanic(0);
 	while(1);
-	runtime·exit(1);	// even more not reached
 }
 
 void
@@ -494,12 +493,12 @@ runtime·noequal(uint32 s, void *a, void *b)
 Alg
 runtime·algarray[] =
 {
-[AMEM]	{ memhash, memequal, memprint, memcopy },
-[ANOEQ]	{ runtime·nohash, runtime·noequal, memprint, memcopy },
-[ASTRING]	{ strhash, strequal, strprint, memcopy },
-[AINTER]		{ interhash, interequal, interprint, memcopy },
-[ANILINTER]	{ nilinterhash, nilinterequal, nilinterprint, memcopy },
-[AMEMWORD] { memhash, memwordequal, memprint, memwordcopy },
+[AMEM]	{ (uint64(*)(uint32, void*)) memhash, (uint32(*)(uint32, void*, void*)) memequal, (void(*)(uint32, void*)) memprint, memcopy },
+[ANOEQ]	{ (uint64(*)(uint32, void*)) runtime·nohash, (uint32(*)(uint32, void*, void*)) runtime·noequal, (void(*)(uint32, void*)) memprint, memcopy },
+[ASTRING]	{ (uint64(*)(uint32, void*)) strhash, (uint32(*)(uint32, void*, void*)) strequal, (void(*)(uint32, void*)) strprint, memcopy },
+[AINTER]		{ (uint64(*)(uint32, void*)) interhash, (uint32(*)(uint32, void*, void*)) interequal, (void(*)(uint32, void*)) interprint, memcopy },
+[ANILINTER]	{ (uint64(*)(uint32, void*)) nilinterhash, (uint32(*)(uint32, void*, void*)) nilinterequal, (void(*)(uint32, void*)) nilinterprint, memcopy },
+[AMEMWORD] { (uint64(*)(uint32, void*)) memhash, (uint32(*)(uint32, void*, void*)) memwordequal, (void(*)(uint32, void*)) memprint, memwordcopy },
 };
 
 int64
