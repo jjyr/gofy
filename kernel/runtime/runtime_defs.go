@@ -198,3 +198,10 @@ var (
 	gcwaiting   int32
 	goos        *int8
 )
+
+type lock struct {
+	key  uint32
+	sema uint32
+}
+
+type note lock

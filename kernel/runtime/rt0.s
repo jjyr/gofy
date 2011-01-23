@@ -1,4 +1,4 @@
-#include "amd64/asm.h"
+#include "asm.h"
 
 #define HEADER 0x100000
 #define PML4 0x1000
@@ -90,7 +90,7 @@ TEXT now64(SB), 7, $0
 	MOVQ $stack0(SB), g_stackguard(CX)
 
 	CALL runtime·initconsole(SB)
-	CALL main·initmem(SB)
+	CALL runtime·initmem(SB)
 	CALL runtime·initinterrupts(SB)
 
 	CALL runtime·schedinit(SB)

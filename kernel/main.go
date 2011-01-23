@@ -20,7 +20,17 @@ func hex(n uint64, b bool) string {
 	return hex(n / 16, false) + string("0123456789ABCDEF"[n & 15])
 }
 
+func fuck(s string) {
+	println("SHIT IS BROKEN")
+	println(s)
+	for {
+	}
+}
+
+
 func main() {
+	println("Hello, World!")
+/*
 	var initp Process
 	initrd := make(Initrd)
 	initrd["hello"] = testbinary[:]
@@ -36,4 +46,5 @@ func main() {
 		for {}
 	}
 	initp.Run()
+*/
 }

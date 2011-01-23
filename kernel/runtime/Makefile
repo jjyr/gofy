@@ -12,22 +12,20 @@ SIZE=64
 CFLAGS=-I$(GOOS) -I$(GOARCH) -I$(GOOS)/$(GOARCH)
 
 GOFILES=\
-	gofykernel/console.go\
-	gofykernel/cp437.go\
+	console.go\
+	cp437.go\
 	debug.go\
 	error.go\
 	extern.go\
 	sig.go\
-	softfloat64.go\
 	type.go\
 	version.go\
 	chan_defs.go\
 	hashmap_defs.go\
 	iface_defs.go\
 	malloc_defs.go\
-	mheapmap$(SIZE)_defs.go\
+	mheapmap64_defs.go\
 	runtime_defs.go\
-	$(GOOS)/runtime_defs.go\
 
 OFILES=\
 	rt0.$O\

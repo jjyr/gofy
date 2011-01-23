@@ -7,10 +7,9 @@ DEPS=runtime
 TARG=kernel
 GOFILES=\
 	main.go\
-	mem.go\
 	file.go\
 	initrd.go\
-	user.go\
+#	user.go\
 
 LD+= -H 2 -T0x100028
 CFLAGS+= -FVw 
