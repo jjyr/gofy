@@ -13,11 +13,11 @@ type SliceHeader struct {
 func cleartlb()
 
 /*
-	the whole address space is 256 TB
-	a page directory pointer table adresses 512 GB
-	a page directory addresses 1 GB
-	a page table addresses 2 MB
-	a page addresses 4 KB
+	the whole address space               is 256 TB
+	a page directory pointer table addresses 512 GB
+	a page directory               addresses   1 GB
+	a page table                   addresses   2 MB
+	a page                         addresses   4 KB
 */
 
 const (
@@ -29,27 +29,29 @@ const (
 	E820RSVD      uint64  = 2
 	MAXE820       = 100   // maximum number of E820 entries
 	PAGESIZE      = 4096
-	LARGEPSIZE    = 2097152
+	LARGEPAGESIZE = 2097152
 	PAGETABLESIZE = 512
 	PAGEAVAIL     uint64 = 1
 	PAGEWRITE     uint64 = 2
+	PAGEUSER      uint64 = 4
 	PAGELARGE     uint64 = 0x80
 	ANTIPAGE      = max32 ^ (PAGESIZE - 1)
 )
 
 type coreMapEntry struct {
-	start uint64
-	end   uint64
+	start   uint64
+	end     uint64
 	virtual uintptr
 }
 
 var (
-	e820map  [][3]uint64
-	e820num  int
-	coremap  [COREMAPSIZE]coreMapEntry
-	cmsize int
-	memsize  uint64
+	e820map     [][3]uint64
+	e820num     int
+	coremap     [COREMAPSIZE]coreMapEntry
+	cmsize      int
+	memsize     uint64
 	maxvirtaddr uintptr
+	kernelpml4  []uint64
 )
 
 func pageroundup(n uint64) uint64 {
@@ -113,8 +115,8 @@ func mapmemory() {
 	pml := (*[PAGETABLESIZE]uint64)(unsafe.Pointer(uintptr(0x1000)))
 	pdp := (*[PAGETABLESIZE]uint64)(unsafe.Pointer(uintptr(0x2000)))
 	pd := (*[PAGETABLESIZE]uint64)(unsafe.Pointer(uintptr(0x3000)))
-	virtual := uintptr(LARGEPSIZE)
-	physical := uint64(LARGEPSIZE)
+	virtual := uintptr(LARGEPAGESIZE)
+	physical := uint64(LARGEPAGESIZE)
 	offset := uintptr(0x4000)
 	k := 0
 	for ; k < cmsize; k++ {
@@ -123,11 +125,11 @@ func mapmemory() {
 		}
 	}
 	fuck("E820 error")
-	found:
+found:
+	coremap[k].virtual = virtual - uintptr(physical - coremap[k].start)
 	for {
 		pd[pdo] = physical | PAGELARGE | PAGEWRITE | PAGEAVAIL
 		pdo++
-		coremap[k].virtual = virtual
 		if pdo == PAGETABLESIZE {
 			pd = (*[PAGETABLESIZE]uint64)(unsafe.Pointer(offset))
 			pdp[pdpo] = uint64(offset) | PAGEWRITE | PAGEAVAIL
@@ -140,8 +142,8 @@ func mapmemory() {
 				pmlo++
 			}
 		}
-		virtual += LARGEPSIZE
-		physical += LARGEPSIZE
+		virtual += LARGEPAGESIZE
+		physical += LARGEPAGESIZE
 		if physical >= coremap[k].end {
 		retry:
 			k++
@@ -149,9 +151,10 @@ func mapmemory() {
 				break
 			}
 			physical = coremap[k].start
-			if physical + LARGEPSIZE > coremap[k].end {
+			if physical+LARGEPAGESIZE > coremap[k].end {
 				goto retry
 			}
+			coremap[k].virtual = virtual - uintptr(physical - coremap[k].start)
 		}
 	}
 	maxvirtaddr = virtual
@@ -173,6 +176,10 @@ func initmem() {
 	mh.Cap = mh.Len
 	processe820()
 	mapmemory()
+	h := (*SliceHeader)(unsafe.Pointer(&kernelpml4))
+	h.Data = 0x1000
+	h.Len = 512
+	h.Cap = 512
 }
 
 func fuck(s string) {
@@ -180,4 +187,47 @@ func fuck(s string) {
 	println(s)
 	for {
 	}
+}
+
+func DecodePhys(p Phys) uintptr {
+	if p < LARGEPAGESIZE {
+		return uintptr(p)
+	}
+	for i := 0; i < cmsize; i++ {
+		if p >= Phys(coremap[i].start) && p < Phys(coremap[i].end) {
+			return uintptr(p) - uintptr(coremap[i].start) + coremap[i].virtual
+		}
+	}
+	fuck("DecodePhys: tried accessing unmapped address")
+	return 0xDEADBEEFDEADBEEF
+}
+
+func DecodeVirt(v uintptr) Phys {
+	if v < LARGEPAGESIZE {
+		return Phys(v)
+	}
+	for i := 0; i < cmsize; i++ {
+		if v >= coremap[i].virtual && v < uintptr(coremap[i].end-coremap[i].start)+coremap[i].virtual {
+			return Phys(v) - Phys(coremap[i].virtual) + Phys(coremap[i].start)
+		}
+	}
+	fuck("DecodeVirt: tried accessing unmapped address")
+	return 0xDEADBEEFDEADBEEF
+}
+
+func MakeTableSlice(p Phys) (res []uint64) {
+	h := (*SliceHeader)(unsafe.Pointer(&res))
+	h.Data = DecodePhys(p)
+	h.Len = 512
+	h.Cap = 512
+	return
+}
+
+func AddrDecode(v uintptr) (pdp, pd, pt, page, disp int) {
+	pdp = int((v >> 39) & 0x1FF)
+	pd = int((v >> 30) & 0x1FF)
+	pt = int((v >> 21) & 0x1FF)
+	page = int((v >> 12) & 0x1FF)
+	disp = int(v & (PAGESIZE - 1))
+	return
 }

@@ -131,3 +131,8 @@ TEXT runtime·outb(SB), 7, $0
 	MOVW addr+0(FP), DX
 	BYTE $0xEE
 	RET
+
+TEXT main·SetCR3(SB), 7, $0
+	MOVQ cr3+0(FP), AX
+	MOVQ AX, CR3
+	RET

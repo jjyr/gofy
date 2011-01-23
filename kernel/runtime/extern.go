@@ -161,3 +161,8 @@ const GOOS string = theGoos
 // GOARCH is the Go tree's architecture target:
 // 386, amd64, or arm.
 const GOARCH string = theGoarch
+
+func memmove(a uintptr, b uintptr, c uint32)
+func Memmove(a uintptr, b uintptr, c uint32) {
+	memmove(a, b, c)
+}

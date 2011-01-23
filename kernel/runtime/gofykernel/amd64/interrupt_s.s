@@ -1,6 +1,6 @@
 #define GSBASE 0xC0000101
 
-TEXT runtime·lidt(SB), $10
+TEXT runtime·lidt(SB), 7, $10
 	MOVQ addr+0(FP), AX
 	MOVQ AX, 2(SP)
 	MOVW $4096, 0(SP)
@@ -11,7 +11,7 @@ TEXT runtime·lidt(SB), $10
 	RET
 
 
-TEXT common_isr(SB), $0
+TEXT common_isr(SB), 7, $0
         SUBQ $152, SP
         MOVQ AX, 0(SP)
         MOVQ CX, 8(SP)

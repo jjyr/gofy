@@ -22,6 +22,7 @@ uint64 runtime·cr2(void);
 void runtime·sti(void);
 void runtime·cli(void);
 
+#pragma textflag 7
 static void
 puthex(uint64 n, uint32 l, int8* t)
 {
@@ -32,6 +33,7 @@ puthex(uint64 n, uint32 l, int8* t)
 	}
 }
 
+#pragma textflag 7
 static void
 int_unknown(IntState st)
 {
@@ -44,6 +46,7 @@ int_unknown(IntState st)
 	main·fuck(s, len);
 }
 
+#pragma textflag 7
 static void
 int_pagefault(IntState st)
 {
@@ -56,6 +59,7 @@ int_pagefault(IntState st)
 	main·fuck(s, len);
 }
 
+#pragma textflag 7
 static void
 int_gpf(IntState st)
 {
@@ -67,6 +71,7 @@ int_gpf(IntState st)
 	main·fuck(s, len);
 }
 
+#pragma textflag 7
 static void
 resetpic(uint64 no)
 {
@@ -74,14 +79,16 @@ resetpic(uint64 no)
 	runtime·outb(0x20, 0x20);
 }
 
+#pragma textflag 7
 static void
 int_timer(IntState st)
 {
 	resetpic(st.no);
-	if(g != m->g0)
-		runtime·gosched();
+//	if(g != m->g0)
+//		runtime·gosched();
 }
 
+#pragma textflag 7
 static void
 int_kb(IntState st)
 {
@@ -133,6 +140,7 @@ runtime·initinterrupts(void)
         runtime·outb(0xA1, 0x00);
         runtime·lidt(idt);
 	runtime·sti();
+	runtime·begincritical();
 }
 
 static int32 critical = 0;
