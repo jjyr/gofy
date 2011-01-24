@@ -166,3 +166,5 @@ func memmove(a uintptr, b uintptr, c uint32)
 func Memmove(a uintptr, b uintptr, c uint32) {
 	memmove(a, b, c)
 }
+
+func Halt()

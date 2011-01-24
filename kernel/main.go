@@ -1,5 +1,7 @@
 package main
 
+import "runtime"
+
 var testbinary [45]byte = [45]byte {
 	0x00, 0x00, 0x8a, 0x97, 0x00, 0x00, 0x00, 0x05,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -23,28 +25,26 @@ func hex(n uint64, b bool) string {
 func fuck(s string) {
 	println("SHIT IS BROKEN")
 	println(s)
-	for {
-	}
+	runtime.Halt()
 }
 
 
 func main() {
-	println("Hello, World!")
-/*
-	var initp Process
+//	var initp Process
+	for {}
 	initrd := make(Initrd)
 	initrd["hello"] = testbinary[:]
 	rootns := Namespace{NamespaceEntry{string: "/", Filesystem: initrd}}
-	f, err := rootns.Open("/hello", ORD, 0)
+	_, err := rootns.Open("/hello", ORD, 0)
 	if err != nil {
 		println(err.String())
 		for {}
 	}
+/*
 	err = initp.Exec(f)
 	if err != nil {
 		println(err.String())
 		for {}
 	}
-	initp.Run()
-*/
+	initp.Run()*/
 }

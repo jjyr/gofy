@@ -26,7 +26,7 @@ enum {
 };
 
 void main·fuck(int8*, uint32);
-void runtime·FlushTLB();
+void runtime·FlushTLB(void);
 void runtime·SetCR3(uint64*);
 void runtime·InvlPG(void*);
 
@@ -68,7 +68,7 @@ falloc(uint64 n)
                         return p;
                 }
         }
-	int8 s[] = "out of memory";
+	static int8 s[] = "out of memory";
 	main·fuck(s, sizeof(s));
         return 0;
 }
@@ -174,7 +174,7 @@ runtime·processe820(void)
 	coremap[cmsize].end = 0;
 	runtime·printf("%d MB core\n", (uint32)((memsize + 524288) / 1048576));
 	if(memsize < 16777216) {
-		int8 s[] = "Sorry, GOFY doesn't run on toasters";
+		static int8 s[] = "Sorry, GOFY doesn't run on toasters";
 		main·fuck(s, sizeof(s));
 	}
 }
@@ -228,11 +228,11 @@ runtime·SysMemInit(void)
 {
 	e820num = *(uint32*)0x600;
 	if(e820num == 0) {
-		int8 s[] = "E820 fucked up";
+		static int8 s[] = "E820 fucked up";
 		main·fuck(s, sizeof(s));
 	}
 	if(e820num > MAXE820) {
-		int8 s[] = "E820 map too large";
+		static int8 s[] = "E820 map too large";
 		main·fuck(s, sizeof(s));
 	}
 	runtime·highest = pageroundup(runtime·highest);
@@ -257,7 +257,7 @@ runtime·MapTmp(uint64 phys)
 	void *r;
 	uint32 i;
 	if((phys & (PAGESIZE - 1)) != 0) {
-		int8 s[] = "MapTmp called with invalid address";
+		static int8 s[] = "MapTmp called with invalid address";
 		main·fuck(s, sizeof(s));
 	}
 
@@ -276,7 +276,7 @@ runtime·MapTmp(uint64 phys)
 			return r;
 		}
 	}
-	int8 s[] = "out of temporary pages";
+	static int8 s[] = "out of temporary pages";
 	main·fuck(s, sizeof(s));
 	return 0;
 }
@@ -289,7 +289,7 @@ runtime·FreeTmp(void* t)
 
 	if(t == 0) return;
 	if(t < (void*) TMPPAGESTART) {
-		int8 s[] = "FreeTmp called with invalid address";
+		static int8 s[] = "FreeTmp called with invalid address";
 		main·fuck(s, sizeof(s));
 	}
 	i = ((uint64)t - TMPPAGESTART) / PAGESIZE;
@@ -304,7 +304,7 @@ runtime·MapMem(uint64 pmlphys, uint64 phys, void* virt, uint32 n)
 	uint64 *pml, *pdp, *pd, *pt;
 
 	if((uint64)phys & ~ANTIPAGE || (uint64)virt & ~ANTIPAGE) {
-		int8 s[] = "MapMem called with invalid address";
+		static int8 s[] = "MapMem called with invalid address";
 		main·fuck(s, sizeof(s));
 	}
 

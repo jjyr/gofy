@@ -147,3 +147,8 @@ TEXT runtime·InvlPG(SB), 7, $0
 	BYTE $0x01
 	BYTE $0x38
 	RET
+
+TEXT runtime·Halt(SB), 7, $0
+	CLI
+	HLT
+	JMP runtime·Halt(SB)
