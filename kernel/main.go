@@ -31,7 +31,6 @@ func fuck(s string) {
 
 func main() {
 //	var initp Process
-	for {}
 	initrd := make(Initrd)
 	initrd["hello"] = testbinary[:]
 	rootns := Namespace{NamespaceEntry{string: "/", Filesystem: initrd}}

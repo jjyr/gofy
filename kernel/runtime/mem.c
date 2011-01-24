@@ -46,7 +46,11 @@ uint64 runtime·highest;
 uint64 *tmppagetable;
 uint64 *pml4;
 
-#define pageroundup(n) (((n) + PAGESIZE - 1) & ~(PAGESIZE - 1))
+uint64
+pageroundup(uint64 n)
+{
+	return (n + PAGESIZE - 1) & ANTIPAGE;
+}
 
 #pragma textflag 7
 uint64
@@ -188,6 +192,7 @@ runtime·mapmemory(void)
 	uint64 *pdp, *pd, *pt;
 
 	pml4 = (uint64*) falloc(1);
+	runtime·memclr((uint8*) pml4, PAGESIZE);
 	pmlo = pdpo = pdo = pto = 511;
 	pdp = pd = pt = 0; // make the compiler happy
 	for(addr=0; addr < runtime·highest; addr += 4096) {
@@ -204,20 +209,26 @@ runtime·mapmemory(void)
 					pdpo = 0;
 					pdp = (uint64*) falloc(1);
 					pml4[pmlo] = ((uint64)pdp) | PAGEAVAIL | PAGEWRITE;
+					runtime·memclr((uint8*) pdp, PAGESIZE);
 				}
 				pd = (uint64*) falloc(1);
 				pdp[pdpo] = ((uint64) pd) | PAGEAVAIL | PAGEWRITE;
+				runtime·memclr((uint8*) pd, PAGESIZE);
 			}
 			pt = (uint64*) falloc(1);
 			pd[pdo] = ((uint64) pt) | PAGEAVAIL | PAGEWRITE;
+			runtime·memclr((uint8*) pt, PAGESIZE);
 		}
 		pt[pto] = addr | PAGEAVAIL | PAGEWRITE;
 	}
 	pdp = (uint64*) falloc(1);
+	runtime·memclr((uint8*) pdp, PAGESIZE);
 	pml4[511] = ((uint64) pdp) | PAGEAVAIL | PAGEWRITE;
 	pd = (uint64*) falloc(1);
+	runtime·memclr((uint8*) pd, PAGESIZE);
 	pdp[511] = ((uint64) pd) | PAGEAVAIL | PAGEWRITE;
 	tmppagetable = (uint64*) falloc(1);
+	runtime·memclr((uint8*) tmppagetable, PAGESIZE);
 	pd[511] = ((uint64) tmppagetable) | PAGEAVAIL | PAGEWRITE;
 	runtime·SetCR3(pml4);
 }
@@ -313,12 +324,27 @@ runtime·MapMem(uint64 pmlphys, uint64 phys, void* virt, uint32 n)
 	pdpo = ((uint64)virt >> 30) & 0x1FF;
 	pdo = ((uint64)virt >> 21) & 0x1FF;
 	pto = ((uint64)virt >> 12) & 0x1FF;
-	if((pml[pmlo] & PAGEAVAIL) == 0) pml[pmlo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
-	pdp = runtime·MapTmp(pml[pmlo] & ANTIPAGE);
-	if((pdp[pdpo] & PAGEAVAIL) == 0) pdp[pdpo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
-	pd = runtime·MapTmp(pdp[pdpo] & ANTIPAGE);
-	if((pd[pdo] & PAGEAVAIL) == 0) pd[pdo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
-	pt = runtime·MapTmp(pd[pdo] & ANTIPAGE);
+	if((pml[pmlo] & PAGEAVAIL) == 0) {
+		pml[pmlo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
+		pdp = runtime·MapTmp(pml[pmlo] & ANTIPAGE);
+		runtime·memclr((uint8*) pdp, PAGESIZE);
+	} else {
+		pdp = runtime·MapTmp(pml[pmlo] & ANTIPAGE);
+	}
+	if((pdp[pdpo] & PAGEAVAIL) == 0) {
+		pdp[pdpo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
+		pd = runtime·MapTmp(pdp[pdpo] & ANTIPAGE);
+		runtime·memclr((uint8*) pd, PAGESIZE);
+	} else {
+		pd = runtime·MapTmp(pdp[pdpo] & ANTIPAGE);
+	}
+	if((pd[pdo] & PAGEAVAIL) == 0) {
+		pd[pdo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
+		pt = runtime·MapTmp(pd[pdo] & ANTIPAGE);
+		runtime·memclr((uint8*) pt, PAGESIZE);
+	} else {
+		pt = runtime·MapTmp(pd[pdo] & ANTIPAGE);
+	}
 
 	while(n--) {
 		pt[pto] = phys | PAGEAVAIL | PAGEWRITE;
@@ -335,14 +361,29 @@ runtime·MapMem(uint64 pmlphys, uint64 phys, void* virt, uint32 n)
 					pdpo = 0;
 					pmlo++;
 					runtime·FreeTmp(pdp);
-					if((pml[pmlo] & PAGEAVAIL) == 0) pml[pmlo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
-					pdp = runtime·MapTmp(pml[pmlo] & ANTIPAGE);
+					if((pml[pmlo] & PAGEAVAIL) == 0) {
+						pml[pmlo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
+						pdp = runtime·MapTmp(pml[pmlo] & ANTIPAGE);
+						runtime·memclr((uint8*) pdp, PAGESIZE);
+					} else {
+						pdp = runtime·MapTmp(pml[pmlo] & ANTIPAGE);
+					}
 				}
-				if((pdp[pdpo] & PAGEAVAIL) == 0) pdp[pdpo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
-				pd = runtime·MapTmp(pdp[pdpo] & ANTIPAGE);
+				if((pdp[pdpo] & PAGEAVAIL) == 0) {
+					pdp[pdpo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
+					pd = runtime·MapTmp(pdp[pdpo] & ANTIPAGE);
+					runtime·memclr((uint8*) pd, PAGESIZE);
+				} else {
+					pd = runtime·MapTmp(pdp[pdpo] & ANTIPAGE);
+				}
 			}
-			if((pd[pdo] & PAGEAVAIL) == 0) pd[pdo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
-			pt = runtime·MapTmp(pd[pdo] & ANTIPAGE);
+			if((pd[pdo] & PAGEAVAIL) == 0) {
+				pd[pdo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
+				pt = runtime·MapTmp(pd[pdo] & ANTIPAGE);
+				runtime·memclr((uint8*) pt, PAGESIZE);
+			} else {
+				pt = runtime·MapTmp(pd[pdo] & ANTIPAGE);
+			}
 		}
 		phys += PAGESIZE;
 	}
