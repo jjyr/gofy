@@ -139,7 +139,6 @@ runtime·initinterrupts(void)
         runtime·outb(0x21, 0x00);
         runtime·outb(0xA1, 0x00);
         runtime·lidt(idt);
-	runtime·sti();
 	runtime·begincritical();
 }
 

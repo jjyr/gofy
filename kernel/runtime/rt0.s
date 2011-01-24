@@ -131,7 +131,19 @@ TEXT runtime·outb(SB), 7, $0
 	BYTE $0xEE
 	RET
 
-TEXT main·SetCR3(SB), 7, $0
+TEXT runtime·SetCR3(SB), 7, $0
 	MOVQ cr3+0(FP), AX
 	MOVQ AX, CR3
+	RET
+
+TEXT runtime·FlushTLB(SB), 7, $0
+	MOVQ CR3, AX
+	MOVQ AX, CR3
+	RET
+
+TEXT runtime·InvlPG(SB), 7, $0
+	MOVQ 8(SP), AX
+	BYTE $0x0F
+	BYTE $0x01
+	BYTE $0x38
 	RET
