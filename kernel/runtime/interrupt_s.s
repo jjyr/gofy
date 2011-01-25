@@ -37,7 +37,10 @@ TEXT common_isr(SB), 7, $0
         RDMSR
         MOVL AX, 144(SP)
         MOVL DX, 148(SP)
-        // FIXME read proper GS
+	MOVQ $stack0(SB), AX
+	MOVQ AX, DX
+	SHRQ $32, DX
+	WRMSR
         MOVQ 152(SP), AX
         SHLQ $3, AX
         ADDQ $isr(SB), AX

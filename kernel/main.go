@@ -30,20 +30,19 @@ func fuck(s string) {
 
 
 func main() {
-//	var initp Process
+	var initp Process
 	initrd := make(Initrd)
 	initrd["hello"] = testbinary[:]
 	rootns := Namespace{NamespaceEntry{string: "/", Filesystem: initrd}}
-	_, err := rootns.Open("/hello", ORD, 0)
+	f, err := rootns.Open("/hello", ORD, 0)
 	if err != nil {
 		println(err.String())
 		for {}
 	}
-/*
 	err = initp.Exec(f)
 	if err != nil {
 		println(err.String())
 		for {}
 	}
-	initp.Run()*/
+	initp.Run()
 }

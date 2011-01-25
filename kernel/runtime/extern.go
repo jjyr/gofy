@@ -168,3 +168,13 @@ func Memmove(a uintptr, b uintptr, c uint32) {
 }
 
 func Halt()
+
+func Falloc(uint64) uint64
+func Ffree(uint64, uint64)
+func SetCR3(uint64)
+func GetCR3() uint64
+func MapMem(uint64, uint64, uintptr, uint32, uint32)
+func MapTmp(uint64) uintptr
+func FreeTmp(uintptr)
+var KernelPD uint64
+var TmpPageTable uint64

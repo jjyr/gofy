@@ -67,6 +67,15 @@ TEXT now64(SB), 7, $0
 	MOVW BX, GS
 	MOVW BX, SS
 
+	MOVQ $tss(SB), AX
+	SHLQ $16, AX
+	ORQ AX, gdt+050(SB)
+
+	MOVQ $050, BX
+	BYTE $0x0F
+	BYTE $0x00
+	BYTE $0xDB
+
 	MOVQ $stack0(SB), DI
 	MOVQ $0, AX
 	MOVQ $0x1000, CX
@@ -104,14 +113,20 @@ TEXT now64(SB), 7, $0
 
 TEXT gdt(SB), 7, $0
 	QUAD $0
-	QUAD $0x20980000000000
-	QUAD $0x00920000000000
+	QUAD $0x20980000000000 // kernel code
+	QUAD $0x00920000000000 // kernel data
+	QUAD $0x20F80000000000 // user code
+	QUAD $0x00F20000000000 // user data
+	QUAD $0x0089000000006C // TSS (address is filled in by software)
+	QUAD $0                // rest of TSS
 
 TEXT gdtptr(SB), 7, $0
-	WORD $24
+	WORD $070
 	QUAD $gdt(SB)
 
 GLOBL stack0(SB), $4096
+
+GLOBL tss(SB), $108
 
 TEXT runtime·notok(SB), 7, $0
 	HLT
@@ -136,6 +151,11 @@ TEXT runtime·SetCR3(SB), 7, $0
 	MOVQ AX, CR3
 	RET
 
+TEXT runtime·GetCR3(SB), 7, $0
+	MOVQ CR3, AX
+	MOVQ AX, cr3+0(FP)
+	RET
+
 TEXT runtime·FlushTLB(SB), 7, $0
 	MOVQ CR3, AX
 	MOVQ AX, CR3
@@ -152,3 +172,21 @@ TEXT runtime·Halt(SB), 7, $0
 	CLI
 	HLT
 	JMP runtime·Halt(SB)
+
+TEXT main·GoUser(SB), 7, $40
+	MOVL SP, tss+4(SB)
+	// set GS
+	MOVL gs+136(FP), AX
+	MOVL gs2+140(FP), DX
+	MOVL $0xC0000101, CX
+	WRMSR
+
+	MOVQ ip+128(FP), AX
+	MOVQ AX, 0(SP)
+	MOVQ $033, 8(SP) // CS
+	MOVQ flags+144(FP), AX
+	MOVQ AX, 16(SP)
+	MOVQ sp+32(FP), AX
+	MOVQ AX, 24(SP)
+	MOVQ $043, 32(SP) // SS
+	WORD $0147510

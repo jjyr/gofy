@@ -50,13 +50,11 @@ int_unknown(IntState st)
 static void
 int_pagefault(IntState st)
 {
-	int8* s;
+	static int8 s[] = "Page fault at address 0x0000000000000000";
 	int32 len;
 
-	s = "Page fault at address 0x0000000000000000";
-	len = runtime·findnull((uint8*)s);
-	puthex(runtime·cr2(), 16, s+len);
-	main·fuck(s, len);
+	puthex(runtime·cr2(), 16, s+sizeof(s));
+	main·fuck(s, sizeof(s));
 }
 
 #pragma textflag 7

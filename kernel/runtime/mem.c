@@ -43,8 +43,9 @@ uint32 cmsize;
 uint64 memsize;
 uint64 e820limits[2 * MAXE820];
 uint64 runtime·highest;
-uint64 *tmppagetable;
+extern uint64 *runtime·TmpPageTable;
 uint64 *pml4;
+extern uint64 runtime·KernelPD;
 
 uint64
 pageroundup(uint64 n)
@@ -78,6 +79,14 @@ falloc(uint64 n)
 }
 
 void
+runtime·Falloc(uint64 n, uint64 r)
+{
+	r = falloc(n);
+	FLUSH(&r);
+}
+
+#pragma textflag 7
+void
 ffree(uint64 p, uint64 n)
 {
 	uint32 i;
@@ -109,6 +118,12 @@ ffree(uint64 p, uint64 n)
 			j->end = p+n;
 		}
         }
+}
+
+void
+runtime·Ffree(uint64 n, uint64 r)
+{
+	ffree(n, r);
 }
 
 
@@ -208,28 +223,31 @@ runtime·mapmemory(void)
 					if(pmlo == 512) pmlo = 0;
 					pdpo = 0;
 					pdp = (uint64*) falloc(1);
-					pml4[pmlo] = ((uint64)pdp) | PAGEAVAIL | PAGEWRITE;
+					pml4[pmlo] = ((uint64)pdp) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
 					runtime·memclr((uint8*) pdp, PAGESIZE);
 				}
 				pd = (uint64*) falloc(1);
-				pdp[pdpo] = ((uint64) pd) | PAGEAVAIL | PAGEWRITE;
+				pdp[pdpo] = ((uint64) pd) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
 				runtime·memclr((uint8*) pd, PAGESIZE);
 			}
 			pt = (uint64*) falloc(1);
-			pd[pdo] = ((uint64) pt) | PAGEAVAIL | PAGEWRITE;
+			pd[pdo] = ((uint64) pt) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
 			runtime·memclr((uint8*) pt, PAGESIZE);
 		}
 		pt[pto] = addr | PAGEAVAIL | PAGEWRITE;
 	}
 	pdp = (uint64*) falloc(1);
 	runtime·memclr((uint8*) pdp, PAGESIZE);
-	pml4[511] = ((uint64) pdp) | PAGEAVAIL | PAGEWRITE;
+	pml4[511] = ((uint64) pdp) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
 	pd = (uint64*) falloc(1);
 	runtime·memclr((uint8*) pd, PAGESIZE);
-	pdp[511] = ((uint64) pd) | PAGEAVAIL | PAGEWRITE;
-	tmppagetable = (uint64*) falloc(1);
-	runtime·memclr((uint8*) tmppagetable, PAGESIZE);
-	pd[511] = ((uint64) tmppagetable) | PAGEAVAIL | PAGEWRITE;
+	pdp[511] = ((uint64) pd) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
+	runtime·TmpPageTable = (uint64*) falloc(1);
+	runtime·memclr((uint8*) runtime·TmpPageTable, PAGESIZE);
+	pd[511] = ((uint64) runtime·TmpPageTable) | PAGEAVAIL | PAGEWRITE;
+
+	pdp = (uint64*) (pml4[0] & ANTIPAGE);
+	runtime·KernelPD = pdp[0] & ANTIPAGE;
 	runtime·SetCR3(pml4);
 }
 
@@ -263,7 +281,7 @@ uint32 tmpref[512];
 
 #pragma textflag 7
 void*
-runtime·MapTmp(uint64 phys)
+maptmp(uint64 phys)
 {
 	void *r;
 	uint32 i;
@@ -273,7 +291,7 @@ runtime·MapTmp(uint64 phys)
 	}
 
 	for(i=0;i<512;i++) {
-		if((tmppagetable[i] & ANTIPAGE) == phys) {
+		if((runtime·TmpPageTable[i] & ANTIPAGE) == phys) {
 			tmpref[i]++;
 			return (void*) (TMPPAGESTART + i * PAGESIZE);
 		}
@@ -281,7 +299,7 @@ runtime·MapTmp(uint64 phys)
 	for(i=0;i<512;i++) {
 		if(tmpref[i] == 0) {
 			tmpref[i]++;
-			tmppagetable[i] = phys | PAGEAVAIL | PAGEWRITE;
+			runtime·TmpPageTable[i] = phys | PAGEAVAIL | PAGEWRITE;
 			r = (void*) (TMPPAGESTART + i * PAGESIZE);
 			runtime·InvlPG(r);
 			return r;
@@ -290,6 +308,13 @@ runtime·MapTmp(uint64 phys)
 	static int8 s[] = "out of temporary pages";
 	main·fuck(s, sizeof(s));
 	return 0;
+}
+
+void
+runtime·MapTmp(uint64 phys, void* r)
+{
+	r = maptmp(phys);
+	FLUSH(&r);
 }
 
 #pragma textflag 7
@@ -309,7 +334,7 @@ runtime·FreeTmp(void* t)
 
 #pragma textflag 7
 void
-runtime·MapMem(uint64 pmlphys, uint64 phys, void* virt, uint32 n)
+runtime·MapMem(uint64 pmlphys, uint64 phys, void* virt, uint32 n, uint32 flags)
 {
 	uint32 pmlo, pdpo, pdo, pto;
 	uint64 *pml, *pdp, *pd, *pt;
@@ -319,35 +344,35 @@ runtime·MapMem(uint64 pmlphys, uint64 phys, void* virt, uint32 n)
 		main·fuck(s, sizeof(s));
 	}
 
-	pml = runtime·MapTmp(pmlphys);
+	pml = maptmp(pmlphys);
 	pmlo = ((uint64)virt >> 39) & 0x1FF;
 	pdpo = ((uint64)virt >> 30) & 0x1FF;
 	pdo = ((uint64)virt >> 21) & 0x1FF;
 	pto = ((uint64)virt >> 12) & 0x1FF;
 	if((pml[pmlo] & PAGEAVAIL) == 0) {
-		pml[pmlo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
-		pdp = runtime·MapTmp(pml[pmlo] & ANTIPAGE);
+		pml[pmlo] = falloc(1) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
+		pdp = maptmp(pml[pmlo] & ANTIPAGE);
 		runtime·memclr((uint8*) pdp, PAGESIZE);
 	} else {
-		pdp = runtime·MapTmp(pml[pmlo] & ANTIPAGE);
+		pdp = maptmp(pml[pmlo] & ANTIPAGE);
 	}
 	if((pdp[pdpo] & PAGEAVAIL) == 0) {
-		pdp[pdpo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
-		pd = runtime·MapTmp(pdp[pdpo] & ANTIPAGE);
+		pdp[pdpo] = falloc(1) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
+		pd = maptmp(pdp[pdpo] & ANTIPAGE);
 		runtime·memclr((uint8*) pd, PAGESIZE);
 	} else {
-		pd = runtime·MapTmp(pdp[pdpo] & ANTIPAGE);
+		pd = maptmp(pdp[pdpo] & ANTIPAGE);
 	}
 	if((pd[pdo] & PAGEAVAIL) == 0) {
-		pd[pdo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
-		pt = runtime·MapTmp(pd[pdo] & ANTIPAGE);
+		pd[pdo] = falloc(1) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
+		pt = maptmp(pd[pdo] & ANTIPAGE);
 		runtime·memclr((uint8*) pt, PAGESIZE);
 	} else {
-		pt = runtime·MapTmp(pd[pdo] & ANTIPAGE);
+		pt = maptmp(pd[pdo] & ANTIPAGE);
 	}
 
 	while(n--) {
-		pt[pto] = phys | PAGEAVAIL | PAGEWRITE;
+		pt[pto] = phys | PAGEAVAIL | PAGEWRITE | flags;
 		pto++;
 		if(pto == PAGETABLESIZE) {
 			pto = 0;
@@ -362,27 +387,27 @@ runtime·MapMem(uint64 pmlphys, uint64 phys, void* virt, uint32 n)
 					pmlo++;
 					runtime·FreeTmp(pdp);
 					if((pml[pmlo] & PAGEAVAIL) == 0) {
-						pml[pmlo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
-						pdp = runtime·MapTmp(pml[pmlo] & ANTIPAGE);
+						pml[pmlo] = falloc(1) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
+						pdp = maptmp(pml[pmlo] & ANTIPAGE);
 						runtime·memclr((uint8*) pdp, PAGESIZE);
 					} else {
-						pdp = runtime·MapTmp(pml[pmlo] & ANTIPAGE);
+						pdp = maptmp(pml[pmlo] & ANTIPAGE);
 					}
 				}
 				if((pdp[pdpo] & PAGEAVAIL) == 0) {
-					pdp[pdpo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
-					pd = runtime·MapTmp(pdp[pdpo] & ANTIPAGE);
+					pdp[pdpo] = falloc(1) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
+					pd = maptmp(pdp[pdpo] & ANTIPAGE);
 					runtime·memclr((uint8*) pd, PAGESIZE);
 				} else {
-					pd = runtime·MapTmp(pdp[pdpo] & ANTIPAGE);
+					pd = maptmp(pdp[pdpo] & ANTIPAGE);
 				}
 			}
 			if((pd[pdo] & PAGEAVAIL) == 0) {
-				pd[pdo] = falloc(1) | PAGEAVAIL | PAGEWRITE;
-				pt = runtime·MapTmp(pd[pdo] & ANTIPAGE);
+				pd[pdo] = falloc(1) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
+				pt = maptmp(pd[pdo] & ANTIPAGE);
 				runtime·memclr((uint8*) pt, PAGESIZE);
 			} else {
-				pt = runtime·MapTmp(pd[pdo] & ANTIPAGE);
+				pt = maptmp(pd[pdo] & ANTIPAGE);
 			}
 		}
 		phys += PAGESIZE;
@@ -410,7 +435,7 @@ runtime·SysAlloc(uintptr n)
 	n = (n + PAGESIZE - 1) / PAGESIZE;
 	phys = falloc(n);
 	runtime·highest += n * PAGESIZE;
-	runtime·MapMem((uint64) pml4, phys, virt, n);
+	runtime·MapMem((uint64) pml4, phys, virt, n, 0);
 	runtime·FlushTLB();
 	runtime·memclr(virt, n * PAGESIZE);
 	return virt;
