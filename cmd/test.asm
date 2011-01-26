@@ -14,11 +14,27 @@ dd 0
 
 text:
 	mov rsp, stack0
-	push hellolen
-	push hello
-	push 1
-	push 2
+
+	mov rax, 0
 	syscall
+	jc prerror
+
+	jmp $
+
+prerror:
+	push 128
+	push buf
+	push rax
+	mov rax, 1
+	syscall
+	add rsp, 12
+
+	push rax
+	push buf
+	push 1
+	mov rax, 2
+	syscall
+
 	jmp $
 
 hello: db "Hello, World", 10
@@ -30,6 +46,8 @@ data:
 datasize equ $ - data
 
 bss:
+
+buf: resb 128
 
 resb 4096
 stack0:

@@ -105,7 +105,7 @@ TEXT now64(SB), 7, $0
 	// set up SYSCALL
 	MOVL $STAR, CX
 	MOVL $0, AX
-	MOVL $8, DX
+	MOVL $0x0008, DX
 	WRMSR
 	INCL CX
 	MOVL $syscallentry(SB), AX
