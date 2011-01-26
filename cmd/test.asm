@@ -15,7 +15,10 @@ dd 0
 text:
 	mov rsp, stack0
 
-	mov rax, 0
+	push 0
+	push 0
+	push 1
+	mov rax, 2
 	syscall
 	jc prerror
 
