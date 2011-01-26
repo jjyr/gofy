@@ -81,16 +81,6 @@ func (p *Process) NewPML4() {
 	Write64(_pdp, runtime.KernelPD | PAGEAVAIL | PAGEWRITE | PAGEUSER)
 	runtime.FreeTmp(_pdp)
 
-	pdp = p.KAllocate(1)
-	Write64(_pml + 511 * 8, pdp | PAGEAVAIL | PAGEWRITE | PAGEUSER)
-	_pdp = runtime.MapTmp(pdp)
-	pd := p.KAllocate(1)
-	Write64(_pdp + 511 * 8, pd | PAGEAVAIL | PAGEWRITE | PAGEUSER)
-	_pd := runtime.MapTmp(pd)
-	Write64(_pd + 511 * 8, runtime.TmpPageTable | PAGEAVAIL | PAGEWRITE | PAGEUSER)
-	runtime.FreeTmp(_pd)
-	runtime.FreeTmp(_pdp)
-
 	runtime.FreeTmp(_pml)
 }
 

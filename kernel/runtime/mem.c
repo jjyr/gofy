@@ -22,7 +22,7 @@ enum {
 	PAGEUSER      = 4,
 	PAGELARGE     = 0x80,
 	ANTIPAGE      = ~(PAGESIZE - 1),
-	TMPPAGESTART  = 0xffffffffffe00000LL
+	TMPPAGESTART  = 0x3fe00000LL
 };
 
 void main·fuck(int8*, uint32);
@@ -236,18 +236,13 @@ runtime·mapmemory(void)
 		}
 		pt[pto] = addr | PAGEAVAIL | PAGEWRITE;
 	}
-	pdp = (uint64*) falloc(1);
-	runtime·memclr((uint8*) pdp, PAGESIZE);
-	pml4[511] = ((uint64) pdp) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
-	pd = (uint64*) falloc(1);
-	runtime·memclr((uint8*) pd, PAGESIZE);
-	pdp[511] = ((uint64) pd) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
+	pdp = (uint64*) (pml4[0] & ANTIPAGE);
+	runtime·KernelPD = pdp[0] & ANTIPAGE;
+	pd = (uint64*) runtime·KernelPD;
 	runtime·TmpPageTable = (uint64*) falloc(1);
 	runtime·memclr((uint8*) runtime·TmpPageTable, PAGESIZE);
 	pd[511] = ((uint64) runtime·TmpPageTable) | PAGEAVAIL | PAGEWRITE;
 
-	pdp = (uint64*) (pml4[0] & ANTIPAGE);
-	runtime·KernelPD = pdp[0] & ANTIPAGE;
 	runtime·SetCR3(pml4);
 }
 
