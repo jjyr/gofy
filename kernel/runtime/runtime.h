@@ -82,6 +82,8 @@ typedef	struct	Complex128	Complex128;
  * every C file linked into a Go program must include runtime.h
  * so that the C compiler knows to avoid other uses of these registers.
  * the Go compilers know to avoid them.
+ *
+ * aiju: bs, amd64 also allocates on GS
  */
 extern	register	G*	g;
 extern	register	M*	m;
@@ -181,6 +183,7 @@ struct	G
 {
 	byte*	stackguard;	// cannot move - also known to linker, libmach, libcgo
 	byte*	stackbase;	// cannot move - also known to libmach, libcgo
+	void*   process; // user process struct, hard coded
 	Defer*	defer;
 	Panic*	panic;
 	Gobuf	sched;
@@ -588,5 +591,5 @@ int32	runtime·chancap(Hchan*);
 
 void	runtime·ifaceE2I(struct InterfaceType*, Eface, Iface*);
 
-void runtime·begincritical(void);
-void runtime·endcritical(void);
+void runtime·BeginCritical(void);
+void runtime·EndCritical(void);

@@ -1,4 +1,5 @@
 #include "asm.h"
+#include "msr.h"
 
 #define HEADER 0x100000
 #define PML4 0x1000
@@ -12,7 +13,7 @@ TEXT _rt0_amd64_gofykernel(SB), 7, $0
 	// parse a.out header and clear bss
 	MOVL (HEADER+4), AX
 	WORD $0xC80F
-	ADDL $4095, AX
+	ADDL $(4095+40), AX // header size
 	ANDL $~4095, AX
 	MOVL (HEADER+8), BX
 	WORD $0xCB0F
@@ -34,6 +35,7 @@ TEXT _rt0_amd64_gofykernel(SB), 7, $0
 	MOVL $(PDP0|0xF), PML4
 	MOVL $(PD0|0xF), PDP0
 	MOVL $0x18F, PD0
+	MOVL $0x200018F, (PD0+8)
 
 	MOVL CR4, AX
 	BTSL $5, AX
@@ -42,7 +44,7 @@ TEXT _rt0_amd64_gofykernel(SB), 7, $0
 	MOVL $PML4, AX
 	MOVL AX, CR3
 
-	MOVL $0xC0000080, CX
+	MOVL $EFER, CX
 	RDMSR
 	ORL $0x100, AX
 	WRMSR
@@ -83,10 +85,9 @@ TEXT now64(SB), 7, $0
 
 	MOVQ $stack0(SB), SP
 	ADDQ $4096, SP
-	MOVQ $stack0(SB), AX
-	MOVQ AX, DX
-	SHRQ $32, DX
-	MOVQ $0xC0000101, CX
+	MOVL $stack0(SB), AX
+	MOVL $0, DX
+	MOVQ $GSBASE, CX
 	WRMSR
 
 	MOVQ $runtime·g0(SB), CX
@@ -100,6 +101,25 @@ TEXT now64(SB), 7, $0
 
 	CALL runtime·initconsole(SB)
 	CALL runtime·initinterrupts(SB)
+
+	// set up SYSCALL
+	MOVL $STAR, CX
+	MOVL $0, AX
+	MOVL $8, DX
+	WRMSR
+	INCL CX
+	MOVL $syscallentry(SB), AX
+	MOVL $0, DX
+	WRMSR
+	INCL CX
+	WRMSR
+	INCL CX
+	MOVL $0, AX
+	WRMSR
+	MOVL $EFER, CX
+	RDMSR
+	BTSL $0, AX
+	WRMSR
 
 	CALL runtime·schedinit(SB)
 	PUSHQ $runtime·mainstart(SB)
@@ -161,6 +181,14 @@ TEXT runtime·FlushTLB(SB), 7, $0
 	MOVQ AX, CR3
 	RET
 
+TEXT runtime·GetGSBase(SB), 7, $0
+	MOVL $GSBASE, CX
+	RDMSR
+	SHLQ $32, DX
+	ORQ DX, AX
+	MOVQ AX, res+0(FP)
+	RET
+
 TEXT runtime·InvlPG(SB), 7, $0
 	MOVQ 8(SP), AX
 	BYTE $0x0F
@@ -173,12 +201,19 @@ TEXT runtime·Halt(SB), 7, $0
 	HLT
 	JMP runtime·Halt(SB)
 
+TEXT main·SetProc(SB), 7, $0
+	MOVQ 0(GS), SI
+	MOVQ p+0(FP), AX
+	MOVQ AX, 8(SI)
+	RET
+
 TEXT main·GoUser(SB), 7, $40
 	MOVL SP, tss+4(SB)
 	// set GS
+	SWAPGS
+	MOVL $GSBASE, CX
 	MOVL gs+136(FP), AX
 	MOVL gs2+140(FP), DX
-	MOVL $0xC0000101, CX
 	WRMSR
 
 	MOVQ ip+128(FP), AX

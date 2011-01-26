@@ -37,36 +37,26 @@ puthex(uint64 n, uint32 l, int8* t)
 static void
 int_unknown(IntState st)
 {
-	int8* s;
-	int32 len;
-
-	s = "Unknown interrupt 0x00";
-	len = runtime·findnull((uint8*)s);
-	puthex(st.no, 2, s+len);
-	main·fuck(s, len);
+	static int8 s[] = "Unknown interrupt 0x00";
+	puthex(st.no, 2, s+sizeof(s));
+	main·fuck(s, sizeof(s));
 }
 
 #pragma textflag 7
 static void
-int_pagefault(IntState st)
+int_pagefault(IntState)
 {
 	static int8 s[] = "Page fault at address 0x0000000000000000";
-	int32 len;
-
 	puthex(runtime·cr2(), 16, s+sizeof(s));
 	main·fuck(s, sizeof(s));
 }
 
 #pragma textflag 7
 static void
-int_gpf(IntState st)
+int_gpf(IntState)
 {
-	int8* s;
-	int32 len;
-
-	s = "General protection fault";
-	len = runtime·findnull((uint8*)s);
-	main·fuck(s, len);
+	static int8 s[] = "General protection fault";
+	main·fuck(s, sizeof(s));
 }
 
 #pragma textflag 7
@@ -137,20 +127,20 @@ runtime·initinterrupts(void)
         runtime·outb(0x21, 0x00);
         runtime·outb(0xA1, 0x00);
         runtime·lidt(idt);
-	runtime·begincritical();
+	runtime·BeginCritical();
 }
 
 static int32 critical = 0;
 
 void
-runtime·begincritical(void)
+runtime·BeginCritical(void)
 {
 	runtime·cli();
 	critical++;
 }
 
 void
-runtime·endcritical(void)
+runtime·EndCritical(void)
 {
 	if(critical > 0)
 		critical--;

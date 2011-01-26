@@ -1,4 +1,4 @@
-#define GSBASE 0xC0000101
+#include "msr.h"
 
 TEXT runtime·lidt(SB), 7, $10
 	MOVQ addr+0(FP), AX
@@ -13,33 +13,32 @@ TEXT runtime·lidt(SB), 7, $10
 
 TEXT common_isr(SB), 7, $0
         SUBQ $152, SP
-        MOVQ AX, 0(SP)
-        MOVQ CX, 8(SP)
-        MOVQ DX, 16(SP)
-        MOVQ BX, 24(SP)
-        MOVQ SP, 32(SP)
-        MOVQ BP, 40(SP)
-        MOVQ SI, 48(SP)
-        MOVQ DI, 56(SP)
-        MOVQ R8, 64(SP)
-        MOVQ R9, 72(SP)
-        MOVQ R10, 80(SP)
-        MOVQ R11, 88(SP)
-        MOVQ R12, 96(SP)
-        MOVQ R13, 104(SP)
-        MOVQ R14, 112(SP)
-        MOVQ R15, 120(SP)
+        MOVQ AX,  0000(SP)
+        MOVQ CX,  0010(SP)
+        MOVQ DX,  0020(SP)
+        MOVQ BX,  0030(SP)
+        MOVQ SP,  0040(SP)
+        MOVQ BP,  0050(SP)
+        MOVQ SI,  0060(SP)
+        MOVQ DI,  0070(SP)
+        MOVQ R8,  0100(SP)
+        MOVQ R9,  0110(SP)
+        MOVQ R10, 0120(SP)
+        MOVQ R11, 0130(SP)
+        MOVQ R12, 0140(SP)
+        MOVQ R13, 0150(SP)
+        MOVQ R14, 0160(SP)
+        MOVQ R15, 0170(SP)
         MOVW DS, BX
-        MOVQ BX, 128(SP)
+        MOVQ BX,  0200(SP)
         MOVQ CR2, BX
-        MOVQ BX, 136(SP)
+        MOVQ BX,  0210(SP)
         MOVL $GSBASE, CX
         RDMSR
-        MOVL AX, 144(SP)
-        MOVL DX, 148(SP)
-	MOVQ $stack0(SB), AX
-	MOVQ AX, DX
-	SHRQ $32, DX
+        MOVL AX,  0220(SP)
+        MOVL DX,  0224(SP)
+	MOVL $stack0(SB), AX
+	MOVL $0, DX
 	WRMSR
         MOVQ 152(SP), AX
         SHLQ $3, AX

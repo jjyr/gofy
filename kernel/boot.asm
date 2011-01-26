@@ -71,7 +71,7 @@ readheader:
 	jnz invalidmagic
 	mov eax, [si+4]
 	bswap eax
-	add eax, 4095
+	add eax, 4095 + 40
 	and eax, ~4095
 	mov ebx, [si+8]
 	bswap ebx
@@ -185,11 +185,11 @@ target:
 gdt:
 	dq 0
 	dd 0xFFFF
-	dd (0xF<<16) | (1<<15) | (1<<12) | (1<<11) | (1<<22)
+	dd (0xF<<16) | (1<<15) | (1<<12) | (1<<11) | (1<<22) | (1<<23)
 	dd 0xFFFF
-	dd (0xF<<16) | (1<<15) | (1<<12) | (1<<9)
+	dd (0xF<<16) | (1<<15) | (1<<12) | (1<<9) | (1<<23)
 	dd 0xFFFF
-	dd (0xF<<16) | (1<<15) | (1<<12) | (1<<11)
+	dd (0xF<<16) | (1<<15) | (1<<12) | (1<<11) | (1<<23)
 
 gdtptr:
 	dw 32

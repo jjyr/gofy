@@ -13,6 +13,11 @@ type SliceHeader struct {
 	Cap  int
 }
 
+type StringHeader struct {
+	Data uintptr
+	Len int
+}
+
 func outb(uint16, uint8)
 
 func initconsole() {

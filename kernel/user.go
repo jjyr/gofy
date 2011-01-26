@@ -29,7 +29,9 @@ type Process struct {
 	highest uintptr  // highest virtual address
 }
 
+// these are used by SYSCALL
 func GoUser(ProcState)
+func SetProc(*Process)
 
 func LE32(b []byte) (r uint32) {
 	r |= uint32(b[0]) << 24
@@ -109,7 +111,7 @@ func (p *Process) Exec(f File) Error {
 	textsize := uint64(LE32(header[4:]))
 	datasize := uint64(LE32(header[8:]))
 	bsssize := uint64(LE32(header[12:]))
-	procsize := pageroundup(textsize) + datasize + bsssize
+	procsize := pageroundup(textsize+40) + datasize + bsssize
 
 	cr3 := runtime.GetCR3()
 	p.CleanUp()
@@ -117,42 +119,28 @@ func (p *Process) Exec(f File) Error {
 	p.highest = USERSTART
 	p.Allocate(procsize)
 	runtime.SetCR3(p.PML4)
-	off := uint64(40)
-	for v = USERSTART; v < USERSTART + uintptr(textsize & ANTIPAGE); v += PAGESIZE {
-		_, err := f.PRead(buf[:], off)
+	off := uint64(0)
+	v = USERSTART
+	end := USERSTART + uintptr(pageroundup(textsize+40)+datasize)
+	for v < end {
+		n, err := f.PRead(buf[:], off)
 		if err != nil {
+			if v+uintptr(n) >= end && err == EOF {
+				break
+			}
 			return err
 		}
-		off += PAGESIZE
-		runtime.Memmove(v, bufh.Data, PAGESIZE)
-	}
-	if v < USERSTART + uintptr(textsize) {
-		n := USERSTART + uintptr(textsize) - v
-		_, err := f.PRead(buf[:n], off)
-		if err != nil {
-			return err
-		}
-		off += uint64(n)
 		runtime.Memmove(v, bufh.Data, uint32(n))
-		v += PAGESIZE
+		off += n
+		v += uintptr(n)
 	}
-	for ; v < USERSTART + uintptr(pageroundup(textsize) + datasize) ; v += PAGESIZE {
-		_, err := f.PRead(buf[:], off)
-		if err == EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-		off += PAGESIZE
-		runtime.Memmove(v, bufh.Data, PAGESIZE)
-	}
-	p.ProcState.ip = USERSTART
+	p.ProcState.ip = uint64(LE32(header[20:]))
 	runtime.SetCR3(cr3)
 	return nil
 }
 
 func (p *Process) Run() {
+	SetProc(p)
 	runtime.SetCR3(p.PML4)
 	GoUser(p.ProcState)
 }

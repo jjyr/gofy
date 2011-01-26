@@ -46,7 +46,7 @@ runtime·lock(Lock *l)
 		runtime·throw("deadlock");
 	l->key = 1;
 	if(l == runtime·schedp)
-		runtime·begincritical();
+		runtime·BeginCritical();
 }
 
 void
@@ -59,7 +59,7 @@ runtime·unlock(Lock *l)
 		runtime·throw("unlock of unlocked lock");
 	l->key = 0;
 	if(l == runtime·schedp)
-		runtime·endcritical();
+		runtime·EndCritical();
 }
 
 void 

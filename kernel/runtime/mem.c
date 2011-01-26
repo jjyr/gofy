@@ -223,7 +223,7 @@ runtime·mapmemory(void)
 					if(pmlo == 512) pmlo = 0;
 					pdpo = 0;
 					pdp = (uint64*) falloc(1);
-					pml4[pmlo] = ((uint64)pdp) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
+					pml4[pmlo] = ((uint64) pdp) | PAGEAVAIL | PAGEWRITE | PAGEUSER;
 					runtime·memclr((uint8*) pdp, PAGESIZE);
 				}
 				pd = (uint64*) falloc(1);

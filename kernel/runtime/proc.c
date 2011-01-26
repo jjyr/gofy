@@ -354,7 +354,7 @@ nextgandunlock(void)
 void
 runtime·stoptheworld(void)
 {
-	runtime·begincritical();
+	runtime·BeginCritical();
 	runtime·lock(&runtime·sched);
 	runtime·gcwaiting = 1;
 	runtime·sched.mcpumax = 1;
@@ -382,7 +382,7 @@ runtime·starttheworld(void)
 	runtime·sched.mcpumax = runtime·sched.gomaxprocs;
 	matchmg();
 	runtime·unlock(&runtime·sched);
-	runtime·endcritical();
+	runtime·EndCritical();
 }
 
 // Called to start an M.

@@ -178,3 +178,6 @@ func MapTmp(uint64) uintptr
 func FreeTmp(uintptr)
 var KernelPD uint64
 var TmpPageTable uint64
+func BeginCritical()
+func EndCritical()
+func GetGSBase() uint64
