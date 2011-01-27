@@ -1,10 +1,12 @@
 #include "runtime.h"
+#include "gdt.h"
+#include "msr.h"
 
 typedef struct IntState IntState;
 struct IntState {
 	uint64 ax, cx, dx, bx, sp, bp, si, di,
 	r8, r9, r10, r11, r12, r13, r14, r15,
-	ds, cr2, gs,
+	ds, cr2, 
 	no, error, ip, cs, flags, usersp, ss;
 };
 
@@ -21,6 +23,8 @@ void runtime·lidt(uint64* idt);
 uint64 runtime·cr2(void);
 void runtime·sti(void);
 void runtime·cli(void);
+uint64 runtime·readMSR(uint64 msr);
+void runtime·writeMSR(uint64 msr, uint64 value);
 
 #pragma textflag 7
 static void
@@ -72,8 +76,14 @@ static void
 int_timer(IntState st)
 {
 	resetpic(st.no);
-//	if(g != m->g0)
-//		runtime·gosched();
+	// we have been summoned from user mode
+	if(st.cs & 3) {
+		uint64 gs;
+		gs = runtime·readMSR(KERNELGS);
+		runtime·writeMSR(KERNELGS, runtime·readMSR(GSBASE));
+		runtime·gosched();
+		runtime·writeMSR(KERNELGS, gs);
+	}
 }
 
 #pragma textflag 7
@@ -108,7 +118,7 @@ runtime·initinterrupts(void)
                 asmhandler[i+10] = 0xFF;
                 asmhandler[i+11] = 0xE0;
 		off = (uint64) asmhandler + i;
-		idt[j*2] = (off & 0xFFFF) | 0x8e0000080000LL | ((off & 0xFFFF0000) << 32LL);
+		idt[j*2] = (off & 0xFFFF) | 0x8e0000000000LL | (GDTKCODE << 16) | ((off & 0xFFFF0000) << 32LL);
 		idt[j*2+1] = off >> 32;
 		isr[j] = int_unknown;
 	}

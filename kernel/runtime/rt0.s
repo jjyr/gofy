@@ -1,5 +1,6 @@
 #include "asm.h"
 #include "msr.h"
+#include "gdt.h"
 
 #define HEADER 0x100000
 #define PML4 0x1000
@@ -58,11 +59,11 @@ TEXT _rt0_amd64_gofykernel(SB), 7, $0
 
 	BYTE $0xEA // LJMP
 	LONG $now64(SB)
-	WORD $8
+	WORD $GDTKCODE
 
 TEXT now64(SB), 7, $0
 	MODE $64
-	MOVW $16, BX
+	MOVW $GDTKDATA, BX
 	MOVW BX, DS
 	MOVW BX, ES
 	MOVW BX, FS
@@ -71,9 +72,9 @@ TEXT now64(SB), 7, $0
 
 	MOVQ $tss(SB), AX
 	SHLQ $16, AX
-	ORQ AX, gdt+050(SB)
+	ORQ AX, gdt+GDTTSS(SB)
 
-	MOVQ $050, BX
+	MOVQ $GDTTSS, BX
 	BYTE $0x0F
 	BYTE $0x00
 	BYTE $0xDB
@@ -88,6 +89,8 @@ TEXT now64(SB), 7, $0
 	MOVL $stack0(SB), AX
 	MOVL $0, DX
 	MOVQ $GSBASE, CX
+	WRMSR
+	INCL CX
 	WRMSR
 
 	MOVQ $runtime·g0(SB), CX
@@ -105,7 +108,7 @@ TEXT now64(SB), 7, $0
 	// set up SYSCALL
 	MOVL $STAR, CX
 	MOVL $0, AX
-	MOVL $0x0008, DX
+	MOVL $(GDTKCODE | ((GDTUCODE32|3) << 16)), DX
 	WRMSR
 	INCL CX
 	MOVL $syscallentry(SB), AX
@@ -135,13 +138,14 @@ TEXT gdt(SB), 7, $0
 	QUAD $0
 	QUAD $0x20980000000000 // kernel code
 	QUAD $0x00920000000000 // kernel data
-	QUAD $0x20F80000000000 // user code
+	QUAD $0                // user 32bit (unused)
 	QUAD $0x00F20000000000 // user data
+	QUAD $0x20F80000000000 // user 64bit
 	QUAD $0x0089000000006C // TSS (address is filled in by software)
 	QUAD $0                // rest of TSS
 
 TEXT gdtptr(SB), 7, $0
-	WORD $070
+	WORD $0100
 	QUAD $gdt(SB)
 
 GLOBL stack0(SB), $4096
@@ -201,12 +205,6 @@ TEXT runtime·Halt(SB), 7, $0
 	HLT
 	JMP runtime·Halt(SB)
 
-TEXT main·SetProc(SB), 7, $0
-	MOVQ 0(GS), SI
-	MOVQ p+0(FP), AX
-	MOVQ AX, 8(SI)
-	RET
-
 TEXT main·GoUser(SB), 7, $40
 	MOVL SP, tss+4(SB)
 	// set GS
@@ -216,12 +214,44 @@ TEXT main·GoUser(SB), 7, $40
 	MOVL gs2+140(FP), DX
 	WRMSR
 
+	MOVQ cx+0010(FP), CX
+	MOVQ dx+0020(FP), DX
+	MOVQ bx+0030(FP), BX
+	MOVQ bp+0050(FP), BP
+	MOVQ si+0060(FP), SI
+	MOVQ di+0070(FP), DI
+	MOVQ r8+0100(FP), R8
+	MOVQ r9+0110(FP), R9
+	MOVQ r10+0120(FP), R10
+	MOVQ r11+0130(FP), R11
+	MOVQ r12+0140(FP), R12
+	MOVQ r13+0150(FP), R13
+	MOVQ r14+0160(FP), R14
+	MOVQ r15+0170(FP), R15
+
 	MOVQ ip+128(FP), AX
 	MOVQ AX, 0(SP)
-	MOVQ $033, 8(SP) // CS
+	MOVQ $(GDTUCODE | 3), 8(SP) // CS
 	MOVQ flags+144(FP), AX
 	MOVQ AX, 16(SP)
 	MOVQ sp+32(FP), AX
 	MOVQ AX, 24(SP)
-	MOVQ $043, 32(SP) // SS
+	MOVQ $(GDTUDATA | 3), 32(SP) // SS
+
+	MOVQ ax+0(FP), AX
+
 	WORD $0147510
+
+TEXT runtime·readMSR(SB), 7, $0
+	MOVL msr+0(FP), CX
+	RDMSR
+	SHLQ $32, DX
+	ORQ DX, AX
+	RET
+
+TEXT runtime·writeMSR(SB), 7, $0
+	MOVL msr+0(FP), CX
+	MOVL var+8(FP), AX
+	MOVL var2+12(FP), DX
+	WRMSR
+	RET

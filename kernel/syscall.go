@@ -14,6 +14,7 @@ const (
 	SYS_PREAD
 	SYS_OPEN
 	SYS_CLOSE
+	SYS_FORK
 	NUM_SYSCALLS
 )
 
@@ -29,6 +30,7 @@ var sysent [NUM_SYSCALLS]Syscall = [NUM_SYSCALLS]Syscall {
 	syscall_pread,
 	syscall_open,
 	syscall_close,
+	syscall_fork,
 }
 
 func (p *Process) string(s,l /* i'm not really stanley lieber */ uint64) string {
@@ -44,7 +46,7 @@ func (p *Process) stack(i uint64) *uint64 {
 
 func (p *Process) syserror(e Error) {
 	p.error = e.String()
-	p.ProcState.rflags |= 1
+	p.ProcState.flags |= 1
 }
 
 func (p *Process) IsInvalid(a uint64, len uint64, t int) bool {
@@ -166,6 +168,15 @@ func syscall_open(p *Process) {
 	p.fd = append(p.fd, f)
 }
 
-func syscall_close(*Process) {
+func syscall_close(p *Process) {
+	nosyscall(p)
 }
 
+func syscall_fork(p *Process) {
+	if p.IsInvalid(p.ProcState.sp, 010, MEMREAD) {
+		return
+	}
+	flags := *p.stack(0)
+	p.Fork(flags)
+	p.ProcState.ax = 1
+}

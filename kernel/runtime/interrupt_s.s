@@ -10,9 +10,8 @@ TEXT runtime·lidt(SB), 7, $10
 	BYTE $0x24
 	RET
 
-
 TEXT common_isr(SB), 7, $0
-        SUBQ $152, SP
+        SUBQ $0220, SP
         MOVQ AX,  0000(SP)
         MOVQ CX,  0010(SP)
         MOVQ DX,  0020(SP)
@@ -33,21 +32,14 @@ TEXT common_isr(SB), 7, $0
         MOVQ BX,  0200(SP)
         MOVQ CR2, BX
         MOVQ BX,  0210(SP)
-        MOVL $GSBASE, CX
-        RDMSR
-        MOVL AX,  0220(SP)
-        MOVL DX,  0224(SP)
-	MOVL $stack0(SB), AX
-	MOVL $0, DX
-	WRMSR
-        MOVQ 152(SP), AX
+	SWAPGS
+
+        MOVQ 0220(SP), AX
         SHLQ $3, AX
         ADDQ $isr(SB), AX
         CALL *(AX)
-        MOVL $GSBASE, CX
-        MOVL 144(SP), AX
-        MOVL 148(SP), DX
-        WRMSR
+
+	SWAPGS
         MOVQ 128(SP), BX
         MOVW BX, DS
         MOVW BX, ES
@@ -66,8 +58,7 @@ TEXT common_isr(SB), 7, $0
         MOVQ 104(SP), R13
         MOVQ 112(SP), R14
         MOVQ 120(SP), R15
-        ADDQ $152, SP
-	ADDQ $16, SP // error code and interrupt number
+        ADDQ $(144+16), SP
         WORD $0xCF48
 
 TEXT runtime·cli(SB), 7, $0

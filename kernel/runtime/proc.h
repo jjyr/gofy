@@ -1,0 +1,11 @@
+#define P_AX 0000
+#define P_CX 0010
+#define P_DX 0020
+#define P_BX 0030
+#define P_SP 0040
+#define P_BP 0050
+#define P_SI 0060
+#define P_DI 0070
+#define P_IP 0200
+#define P_GS 0210
+#define P_FLAGS 0220

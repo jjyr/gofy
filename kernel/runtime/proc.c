@@ -1260,3 +1260,10 @@ runtime·Goroutines(int32 ret)
 	ret = runtime·sched.gcount;
 	FLUSH(&ret);
 }
+
+void
+runtime·SetLocalCR3(uint64 cr3)
+{
+	g->cr3 = cr3;
+	runtime·SetCR3(cr3);
+}

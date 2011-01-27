@@ -115,6 +115,11 @@ TEXT runtime·gogo(SB), 7, $0
 	MOVQ	0(DX), CX		// make sure g != nil
 	get_tls(CX)
 	MOVQ	DX, g(CX)
+	MOVQ	24(DX), CX		// restore CR3
+	TESTQ	CX, CX
+	JEQ	gogonocr3
+	MOVQ	CX, CR3
+gogonocr3:
 	MOVQ	gobuf_sp(BX), SP	// restore SP
 	MOVQ	gobuf_pc(BX), BX
 	JMP	BX
@@ -129,6 +134,11 @@ TEXT runtime·gogocall(SB), 7, $0
 	get_tls(CX)
 	MOVQ	DX, g(CX)
 	MOVQ	0(DX), CX	// make sure g != nil
+	MOVQ	24(DX), CX		// restore CR3
+	TESTQ	CX, CX
+	JEQ	gogocallnocr3
+	MOVQ	CX, CR3
+gogocallnocr3:
 	MOVQ	gobuf_sp(BX), SP	// restore SP
 	MOVQ	gobuf_pc(BX), BX
 	PUSHQ	BX

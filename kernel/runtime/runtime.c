@@ -545,3 +545,9 @@ runtime·FuncForPC(uintptr pc, void *retf)
 	retf = runtime·findfunc(pc);
 	FLUSH(&retf);
 }
+
+void
+main·SetProc(void* p)
+{
+	g->process = p;
+}

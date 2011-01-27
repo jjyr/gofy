@@ -184,6 +184,7 @@ struct	G
 	byte*	stackguard;	// cannot move - also known to linker, libmach, libcgo
 	byte*	stackbase;	// cannot move - also known to libmach, libcgo
 	void*   process; // user process struct, hard coded
+	uint64  cr3; // local CR3 -- pure kernel goroutines have it zero
 	Defer*	defer;
 	Panic*	panic;
 	Gobuf	sched;

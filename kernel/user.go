@@ -15,11 +15,12 @@ const (
 	PAGEUSER  = 4
 )
 
-// the layout of this structure is hardcoded into GoUser
+// the layout of this structure is hardcoded into GoUser, syscall, etc.
+// don't fuck with it
 type ProcState struct {
 	ax, cx, dx, bx, sp, bp, si, di       uint64
 	r8, r9, r10, r11, r12, r13, r14, r15 uint64
-	ip, gs, rflags                       uint64
+	ip, gs, flags                       uint64
 }
 
 type Process struct {
@@ -32,7 +33,6 @@ type Process struct {
 	fd []File
 }
 
-// these are used by SYSCALL
 func GoUser(ProcState)
 func SetProc(*Process)
 
@@ -77,14 +77,13 @@ func Write64(n uintptr, v uint64) {
 func (p *Process) NewPML4() {
 	p.PML4 = p.KAllocate(1)
 	_pml := runtime.MapTmp(p.PML4)
-
 	pdp := p.KAllocate(1)
 	Write64(_pml, pdp | PAGEAVAIL | PAGEWRITE | PAGEUSER)
 	_pdp := runtime.MapTmp(pdp)
 	Write64(_pdp, runtime.KernelPD | PAGEAVAIL | PAGEWRITE | PAGEUSER)
 	runtime.FreeTmp(_pdp)
-
 	runtime.FreeTmp(_pml)
+	runtime.SetLocalCR3(p.PML4)
 }
 
 func (p *Process) Exec(f File) Error {
@@ -106,12 +105,10 @@ func (p *Process) Exec(f File) Error {
 	bsssize := uint64(LE32(header[12:]))
 	procsize := pageroundup(textsize+40) + datasize + bsssize
 
-	cr3 := runtime.GetCR3()
 	p.CleanUp()
 	p.NewPML4()
 	p.highest = USERSTART
 	p.Allocate(procsize)
-	runtime.SetCR3(p.PML4)
 	off := uint64(0)
 	v = USERSTART
 	end := USERSTART + uintptr(pageroundup(textsize+40)+datasize)
@@ -128,12 +125,38 @@ func (p *Process) Exec(f File) Error {
 		v += uintptr(n)
 	}
 	p.ProcState.ip = uint64(LE32(header[20:]))
-	runtime.SetCR3(cr3)
 	return nil
 }
 
 func (p *Process) Run() {
 	SetProc(p)
-	runtime.SetCR3(p.PML4)
 	GoUser(p.ProcState)
+}
+
+func (q *Process) Dawn(flags uint64, c chan bool) {
+	var buf [PAGESIZE]byte
+	highest := q.highest
+	pml4 := q.PML4
+	q.highest = USERSTART
+	q.NewPML4()
+	q.Allocate(uint64(highest - USERSTART))
+	bufh := (*runtime.SliceHeader)(unsafe.Pointer(&buf))
+	for v := uintptr(USERSTART); v < highest; v += PAGESIZE {
+		runtime.SetLocalCR3(pml4)
+		runtime.Memmove(bufh.Data, v, PAGESIZE)
+		runtime.SetLocalCR3(q.PML4)
+		runtime.Memmove(v, bufh.Data, PAGESIZE)
+	}
+	q.ProcState.ax = 0
+	c<-false
+	q.Run()
+}
+
+func (p *Process) Fork(flags uint64) (q *Process) {
+	c := make(chan bool)
+	q = new(Process)
+	*q = *p
+	go q.Dawn(flags, c)
+	<-c
+	return
 }

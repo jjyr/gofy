@@ -181,3 +181,4 @@ var TmpPageTable uint64
 func BeginCritical()
 func EndCritical()
 func GetGSBase() uint64
+func SetLocalCR3(uint64)
