@@ -16,8 +16,24 @@ text:
 	mov rsp, stack0
 
 	push 0
-	push 0
 	push 1
+	push hellolen
+	push hello
+	mov rax, 4
+	syscall
+	jc prerror
+	add rsp, 32
+
+	push 128
+	push buf
+	push rax
+	mov rax, 3
+	syscall
+	add rsp, 12
+
+	push rax
+	push buf
+	push 0
 	mov rax, 2
 	syscall
 	jc prerror
@@ -27,20 +43,20 @@ text:
 prerror:
 	push 128
 	push buf
-	push rax
 	mov rax, 1
 	syscall
-	add rsp, 12
+	add rsp, 8
 
 	push rax
 	push buf
 	push 1
 	mov rax, 2
 	syscall
+	add rsp, 12
 
 	jmp $
 
-hello: db "Hello, World", 10
+hello: db "/hello.txt"
 hellolen equ $ - hello
 
 textsize equ $ - text

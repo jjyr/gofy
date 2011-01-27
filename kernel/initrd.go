@@ -21,7 +21,7 @@ func (f InitrdFile) PWrite(targ []byte, off uint64) (n uint64, err Error) {
 func (f InitrdFile) Close() {
 }
 
-func (fs Initrd) Open(name string, flags int, mode int) (File, Error) {
+func (fs Initrd) Open(name string, flags int, mode uint32) (File, Error) {
 	if flags != ORD {
 		return nil, SimpleError("invalid operation")
 	}

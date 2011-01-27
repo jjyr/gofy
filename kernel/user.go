@@ -27,7 +27,9 @@ type Process struct {
 	PML4 uint64
 	mem [][2]uint64
 	highest uintptr  // highest virtual address
-	errors []string
+	error string
+	ns Namespace
+	fd []File
 }
 
 // these are used by SYSCALL

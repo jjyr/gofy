@@ -25,6 +25,7 @@ func main() {
 //	runtime.EndCritical()
 	initrd := make(Initrd)
 	initrd["hello"] = testbinary[:]
+	initrd["hello.txt"] = ([]byte)("Hello, World")[:]
 	rootns := Namespace{NamespaceEntry{string: "/", Filesystem: initrd}}
 	f, err := rootns.Open("/hello", ORD, 0)
 	if err != nil {
@@ -36,5 +37,6 @@ func main() {
 		println(err.String())
 		for {}
 	}
+	initp.ns = rootns
 	initp.Run()
 }

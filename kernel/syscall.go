@@ -10,7 +10,10 @@ type Syscall func(*Process)
 const (
 	SYS_INVALID = iota
 	SYS_WTF
-	SYS_WRITE
+	SYS_PWRITE
+	SYS_PREAD
+	SYS_OPEN
+	SYS_CLOSE
 	NUM_SYSCALLS
 )
 
@@ -22,7 +25,10 @@ const (
 var sysent [NUM_SYSCALLS]Syscall = [NUM_SYSCALLS]Syscall {
 	nosyscall,
 	syscall_wtf,
-	syscall_write,
+	syscall_pwrite,
+	syscall_pread,
+	syscall_open,
+	syscall_close,
 }
 
 func (p *Process) string(s,l /* i'm not really stanley lieber */ uint64) string {
@@ -37,19 +43,7 @@ func (p *Process) stack(i uint64) *uint64 {
 }
 
 func (p *Process) syserror(e Error) {
-	var kf int
-	str := e.String()
-	for k, v := range p.errors {
-		if v == "" {
-			p.errors[k] = v
-			kf = k
-			goto found
-		}
-	}
-	kf = len(p.errors)
-	p.errors = append(p.errors, str)
-found:
-	p.ProcState.ax = uint64(kf + 1)
+	p.error = e.String()
 	p.ProcState.rflags |= 1
 }
 
@@ -70,8 +64,69 @@ func nosyscall(p *Process) {
 	p.syserror(SimpleError("No such syscall"))
 }
 
-func syscall_write(p *Process) {
-	if p.IsInvalid(p.ProcState.sp, 030, MEMREAD) {
+func syscall_wtf(p *Process) {
+	var s string
+
+	if p.IsInvalid(p.ProcState.sp, 020, MEMREAD) {
+		return
+	}
+	buf := *p.stack(0)
+	l := uint32(*p.stack(1))
+
+	s = p.error
+	if uint32(len(s)) > l {
+		goto end
+	}
+	if p.IsInvalid(buf, uint64(l), MEMWRITE) {
+		return
+	}
+	sh := (*runtime.StringHeader)(unsafe.Pointer(&s))
+	runtime.Memmove(uintptr(buf), sh.Data, l)
+end:
+	p.ProcState.ax = uint64(len(s))
+}
+
+func (p *Process) getfd(n int) (f File) {
+	if n > len(p.fd) {
+		return nil
+	}
+	f = p.fd[n]
+	if f == nil {
+		p.syserror(SimpleError("no such fd"))
+	}
+	return
+}
+
+func syscall_pread(p *Process) {
+	var buf []byte
+
+	if p.IsInvalid(p.ProcState.sp, 040, MEMREAD) {
+		return
+	}
+	fd := *p.stack(0)
+	b := *p.stack(1)
+	l := *p.stack(2)
+	off := *p.stack(3)
+	if p.IsInvalid(b, l, MEMWRITE) {
+		return
+	}
+	f := p.getfd(int(fd))
+	if f == nil {
+		return
+	}
+	bufh := (*runtime.SliceHeader)(unsafe.Pointer(&buf))
+	bufh.Data = uintptr(b)
+	bufh.Len = int(l)
+	bufh.Cap = int(l)
+	n, err := f.PRead(buf, off)
+	p.ProcState.ax = n
+	if err != nil {
+		p.syserror(err)
+	}
+}
+
+func syscall_pwrite(p *Process) {
+	if p.IsInvalid(p.ProcState.sp, 040, MEMREAD) {
 		return
 	}
 	b := *p.stack(1)
@@ -82,29 +137,35 @@ func syscall_write(p *Process) {
 	print(p.string(b, l))
 }
 
-func syscall_wtf(p *Process) {
-	var s string
 
-	if p.IsInvalid(p.ProcState.sp, 030, MEMREAD) {
+func syscall_open(p *Process) {
+	if p.IsInvalid(p.ProcState.sp, 040, MEMREAD) {
 		return
 	}
-	k := *p.stack(0) - 1
-	buf := *p.stack(1)
-	l := uint32(*p.stack(2))
-
-	if int(k) >= len(p.errors) {
-		goto end
-	}
-	s = p.errors[k]
-	if uint32(len(s)) > l {
-		goto end
-	}
-	if p.IsInvalid(buf, uint64(l), MEMWRITE) {
+	nameb := *p.stack(0)
+	namel := *p.stack(1)
+	mode := *p.stack(2)
+	perm := *p.stack(3)
+	if p.IsInvalid(nameb, namel, MEMREAD) {
 		return
 	}
-	sh := (*runtime.StringHeader)(unsafe.Pointer(&s))
-	runtime.Memmove(uintptr(buf), sh.Data, l)
-	p.errors[k] = ""
-end:
-	p.ProcState.ax = uint64(len(s))
+	name := p.string(nameb, namel)
+	f, err := p.ns.Open(name, int(mode), uint32(perm))
+	if err != nil {
+		p.syserror(err)
+		return
+	}
+	for k, v := range p.fd {
+		if v == nil {
+			p.fd[k] = v
+			p.ProcState.ax = uint64(k)
+			return
+		}
+	}
+	p.ProcState.ax = uint64(len(p.fd))
+	p.fd = append(p.fd, f)
 }
+
+func syscall_close(*Process) {
+}
+

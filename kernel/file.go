@@ -19,7 +19,6 @@ func (NotFoundError) String() string {
 	return "file not found"
 }
 
-
 type File interface {
 	PRead([]byte, uint64) (uint64, Error)
 	PWrite([]byte, uint64) (uint64, Error)
@@ -27,7 +26,7 @@ type File interface {
 }
 
 type Filesystem interface {
-	Open(name string, flags int, mode int) (File, Error)
+	Open(name string, flags int, mode uint32) (File, Error)
 }
 
 type NamespaceEntry struct {
@@ -36,7 +35,7 @@ type NamespaceEntry struct {
 }
 type Namespace []NamespaceEntry
 
-func (ns Namespace) Open(name string, flags int, mode int) (File, Error) {
+func (ns Namespace) Open(name string, flags int, mode uint32) (File, Error) {
 	for _, v := range ns {
 		if v.string == name[:len(v.string)] {
 			f, err := v.Filesystem.Open(name[len(v.string):], flags, mode)
