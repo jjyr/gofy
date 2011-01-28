@@ -254,3 +254,12 @@ TEXT runtime·writeMSR(SB), 7, $0
 	MOVL var2+12(FP), DX
 	WRMSR
 	RET
+
+TEXT runtime·getTSSSP(SB), 7, $0
+	MOVQ tss+4(SB), AX
+	RET
+
+TEXT runtime·setTSSSP(SB), 7, $0
+	MOVQ val+0(FP), AX
+	MOVQ AX, tss+4(SB)
+	RET

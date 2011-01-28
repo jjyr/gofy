@@ -34,6 +34,9 @@ print:
 	jc prerror
 	add rsp, 32
 
+	mov rcx, 100000
+	loop $
+
 	jmp print
 
 prerror:
@@ -60,6 +63,7 @@ textsize equ $ - text
 data:
 datasize equ $ - data
 
+section .bss
 bss:
 
 buf: resb 128

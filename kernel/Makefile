@@ -45,7 +45,7 @@ runng: image
 	qemu-system-x86_64 -hda image $@ -nographic
 
 rund: image
-	qemu-system-x86_64 -hda image -d in_asm,int,cpu -no-reboot
+	qemu-system-x86_64 -hda image -d in_asm,int -no-reboot
 
 rundd: image kernel.elf
 	qemu-system-x86_64 -hda image -s -S &

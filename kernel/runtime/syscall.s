@@ -4,8 +4,8 @@
 
 TEXT syscallentry(SB), 7, $0
 	SWAPGS
-	MOVQ 0(GS), SI
-	MOVQ 16(SI), BP
+	MOVQ g(CX), SI
+	MOVQ g_process(SI), BP
 	MOVQ SP, P_SP(BP)
 	MOVQ CX, P_IP(BP)
 	BTRQ $0, P_FLAGS(BP)
@@ -20,7 +20,7 @@ TEXT syscallentry(SB), 7, $0
 	INCL CX
 	WRMSR
 	POPQ AX
-	PUSHQ runtime·counter(SB)
+	PUSHQ P_TIME(BP)
 	STI
 
 	MOVQ main·sysent(SB)(AX*8), AX
@@ -29,10 +29,13 @@ TEXT syscallentry(SB), 7, $0
 	POPQ BP
 
 	POPQ AX
-	CMPQ AX, runtime·counter(SB) // check if a timer interrupt occured
+	CMPQ AX, P_TIME(BP) // check if a timer interrupt occured
 	JEQ noswitch
 
+	PUSHQ BP
 	CALL runtime·gosched(SB)
+	POPQ BP
+	MOVQ SP, tss+4(SB)
 
 noswitch:
 	CLI
@@ -49,4 +52,3 @@ noswitch:
 	BYTE $0x48 // SYSRETQ
 	BYTE $0x0F
 	BYTE $0x07
-

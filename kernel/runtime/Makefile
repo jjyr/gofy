@@ -9,7 +9,7 @@ SIZE=64
 
 # TODO(kaib): fix register allocation to honor extern register so we
 # can enable optimizations again.
-CFLAGS=-I$(GOOS) -I$(GOARCH) -I$(GOOS)/$(GOARCH) -FVw
+CFLAGS=-FVw
 
 GOFILES=\
 	console.go\
@@ -64,7 +64,6 @@ OFILES=\
 	slice.$O\
 	string.$O\
 	symtab.$O\
-	sys.$O\
 	thread.$O\
 	traceback.$O\
 	$(OFILES_$(GOARCH))\
@@ -74,15 +73,22 @@ HFILES=\
 	runtime.h\
 	hashmap.h\
 	malloc.h\
-	$(GOARCH)/asm.h\
-	$(GOOS)/os.h\
-	$(GOOS)/signals.h\
-	$(GOOS)/$(GOARCH)/defs.h\
+	asm.h\
+	os.h\
+	signals.h\
+	defs.h\
 
 GOFILES+=$(GOFILES_$(GOOS))
 
 # special, out of the way compiler flag that means "add runtime metadata to output"
 GC+= -+
+
+%.$O:	%.c asm.h
+	$(CC) $(CFLAGS) $<
+
+%.$O:	%.s asm.h
+	$(AS) $<
+
 
 include $(GOROOT)/src/Make.pkg
 
@@ -93,9 +99,9 @@ $(pkgdir)/%.h: %.h
 clean: clean-local
 
 clean-local:
-	rm -f goc2c mkversion version.go */asm.h runtime.acid.* $$(ls *.goc | sed 's/goc$$/c/')
+	rm -f goc2c mkversion version.go asm.h runtime.acid.* $$(ls *.goc | sed 's/goc$$/c/')
 
-$(GOARCH)/asm.h: mkasmh.sh runtime.acid.$(GOARCH)
+asm.h: mkasmh.sh runtime.acid.$(GOARCH)
 	./mkasmh.sh >$@.x
 	mv -f $@.x $@
 
@@ -111,21 +117,6 @@ version.go: mkversion
 %.c:	%.goc goc2c
 	./goc2c `pwd`/$< > $@.tmp
 	mv -f $@.tmp $@
-
-%.$O:	$(GOARCH)/%.c
-	$(CC) $(CFLAGS) $<
-
-%.$O:	$(GOOS)/%.c
-	$(CC) $(CFLAGS) $<
-
-%.$O:	$(GOOS)/$(GOARCH)/%.c
-	$(CC) $(CFLAGS) $<
-
-%.$O:	$(GOARCH)/%.s $(GOARCH)/asm.h
-	$(AS) $<
-
-%.$O:	$(GOOS)/$(GOARCH)/%.s $(GOARCH)/asm.h
-	$(AS) $<
 
 # for discovering offsets inside structs when debugging
 runtime.acid.$(GOARCH): runtime.h proc.c

@@ -243,6 +243,9 @@ runtime·mapmemory(void)
 	runtime·memclr((uint8*) runtime·TmpPageTable, PAGESIZE);
 	pd[511] = ((uint64) runtime·TmpPageTable) | PAGEAVAIL | PAGEWRITE;
 
+	pt = (uint64*) (pd[0] & ANTIPAGE);
+	pt[0] = 0;
+	
 	runtime·SetCR3(pml4);
 }
 

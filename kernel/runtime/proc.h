@@ -9,3 +9,4 @@
 #define P_IP 0200
 #define P_GS 0210
 #define P_FLAGS 0220
+#define P_TIME 0230

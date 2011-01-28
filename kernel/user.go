@@ -25,6 +25,7 @@ type ProcState struct {
 
 type Process struct {
 	ProcState
+	time uint64
 	PML4 uint64
 	mem [][2]uint64
 	highest uintptr  // highest virtual address
@@ -134,12 +135,12 @@ func (p *Process) Run() {
 }
 
 func (q *Process) Dawn(flags uint64, c chan bool) {
-	var buf [PAGESIZE]byte
 	highest := q.highest
 	pml4 := q.PML4
 	q.highest = USERSTART
 	q.NewPML4()
 	q.Allocate(uint64(highest - USERSTART))
+	buf := make([]byte, PAGESIZE)
 	bufh := (*runtime.SliceHeader)(unsafe.Pointer(&buf))
 	for v := uintptr(USERSTART); v < highest; v += PAGESIZE {
 		runtime.SetLocalCR3(pml4)

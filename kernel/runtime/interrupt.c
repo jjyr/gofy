@@ -1,6 +1,7 @@
 #include "runtime.h"
 #include "gdt.h"
 #include "msr.h"
+#include "proc.h"
 
 typedef struct IntState IntState;
 struct IntState {
@@ -11,8 +12,6 @@ struct IntState {
 };
 
 typedef void (*InterruptHandler)(IntState st);
-
-uint64 runtime·counter;
 
 uint64 idt[512];
 byte asmhandler[16*256];
@@ -27,6 +26,8 @@ void runtime·sti(void);
 void runtime·cli(void);
 uint64 runtime·readMSR(uint64 msr);
 void runtime·writeMSR(uint64 msr, uint64 value);
+uint64 runtime·getTSSSP(void);
+void runtime·setTSSSP(uint64 sp);
 
 #pragma textflag 7
 static void
@@ -41,6 +42,23 @@ puthex(uint64 n, uint32 l, int8* t)
 
 #pragma textflag 7
 static void
+int_divbyzero(IntState)
+{
+	static int8 s[] = "Division by zero";
+	main·fuck(s, sizeof(s));
+}
+
+#pragma textflag 7
+static void
+int_invalid(IntState st)
+{
+	static int8 s[] = "Invalid instruction at 0x0000000000000000";
+	puthex(st.ip, 16, s+sizeof(s));
+	main·fuck(s, sizeof(s));
+}
+
+#pragma textflag 7
+static void
 int_unknown(IntState st)
 {
 	static int8 s[] = "Unknown interrupt 0x00";
@@ -50,7 +68,7 @@ int_unknown(IntState st)
 
 #pragma textflag 7
 static void
-int_pagefault(IntState)
+int_pagefault(IntState st)
 {
 	static int8 s[] = "Page fault at address 0x0000000000000000";
 	puthex(runtime·cr2(), 16, s+sizeof(s));
@@ -78,14 +96,17 @@ static void
 int_timer(IntState st)
 {
 	resetpic(st.no);
-	runtime·counter++;
+	if(g && g->process)
+		(*(uint64*)((uint8*)g->process + P_TIME))++;
 	// we have been summoned from user mode
 	if(st.cs & 3) {
-		uint64 gs;
+		uint64 gs, ksp;
 		gs = runtime·readMSR(KERNELGS);
+		ksp = runtime·getTSSSP();
 		runtime·writeMSR(KERNELGS, runtime·readMSR(GSBASE));
 		runtime·gosched();
 		runtime·cli();
+		runtime·setTSSSP(ksp);
 		runtime·writeMSR(KERNELGS, gs);
 	}
 }
@@ -126,6 +147,8 @@ runtime·initinterrupts(void)
 		idt[j*2+1] = off >> 32;
 		isr[j] = int_unknown;
 	}
+	isr[0x00] = int_divbyzero;
+	isr[0x06] = int_invalid;
 	isr[0x0D] = int_gpf;
 	isr[0x0E] = int_pagefault;
 	isr[0x20] = int_timer;
