@@ -103,6 +103,7 @@ TEXT now64(SB), 7, $0
 	MOVQ $stack0(SB), g_stackguard(CX)
 
 	CALL runtime·initconsole(SB)
+	CALL runtime·initeia232(SB)
 	CALL runtime·initinterrupts(SB)
 
 	// set up SYSCALL
@@ -117,7 +118,7 @@ TEXT now64(SB), 7, $0
 	INCL CX
 	WRMSR
 	INCL CX
-	MOVL $0, AX
+	MOVL $0x200, AX
 	WRMSR
 	MOVL $EFER, CX
 	RDMSR
@@ -170,6 +171,11 @@ TEXT runtime·outb(SB), 7, $0
 	BYTE $0xEE
 	RET
 
+TEXT runtime·inb(SB), 7, $0
+	MOVW addr+0(FP), DX
+	BYTE $0xEC
+	RET
+
 TEXT runtime·SetCR3(SB), 7, $0
 	MOVQ cr3+0(FP), AX
 	MOVQ AX, CR3
@@ -185,14 +191,6 @@ TEXT runtime·FlushTLB(SB), 7, $0
 	MOVQ AX, CR3
 	RET
 
-TEXT runtime·GetGSBase(SB), 7, $0
-	MOVL $GSBASE, CX
-	RDMSR
-	SHLQ $32, DX
-	ORQ DX, AX
-	MOVQ AX, res+0(FP)
-	RET
-
 TEXT runtime·InvlPG(SB), 7, $0
 	MOVQ 8(SP), AX
 	BYTE $0x0F
@@ -206,6 +204,7 @@ TEXT runtime·Halt(SB), 7, $0
 	JMP runtime·Halt(SB)
 
 TEXT main·GoUser(SB), 7, $40
+	CLI
 	MOVL SP, tss+4(SB)
 	// set GS
 	SWAPGS

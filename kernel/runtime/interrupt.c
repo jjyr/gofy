@@ -12,6 +12,8 @@ struct IntState {
 
 typedef void (*InterruptHandler)(IntState st);
 
+uint64 runtime·counter;
+
 uint64 idt[512];
 byte asmhandler[16*256];
 InterruptHandler isr[256];
@@ -76,12 +78,14 @@ static void
 int_timer(IntState st)
 {
 	resetpic(st.no);
+	runtime·counter++;
 	// we have been summoned from user mode
 	if(st.cs & 3) {
 		uint64 gs;
 		gs = runtime·readMSR(KERNELGS);
 		runtime·writeMSR(KERNELGS, runtime·readMSR(GSBASE));
 		runtime·gosched();
+		runtime·cli();
 		runtime·writeMSR(KERNELGS, gs);
 	}
 }

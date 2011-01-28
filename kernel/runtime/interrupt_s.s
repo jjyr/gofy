@@ -39,6 +39,7 @@ TEXT common_isr(SB), 7, $0
         ADDQ $isr(SB), AX
         CALL *(AX)
 
+	CLI // if interrupt got enabled for whatever reason, disable them before shit happens w.r.t. GS
 	SWAPGS
         MOVQ 128(SP), BX
         MOVW BX, DS

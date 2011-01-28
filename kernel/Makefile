@@ -37,9 +37,12 @@ boot: boot.asm
 gofmt:
 	( for i in $(GOFILES); do gofmt -w $$i; done )
 
-.PHONY: run rund rundd
+.PHONY: run runng rund rundd
 run: image
-	qemu-system-x86_64 -hda image
+	qemu-system-x86_64 -hda image $@
+
+runng: image
+	qemu-system-x86_64 -hda image $@ -nographic
 
 rund: image
 	qemu-system-x86_64 -hda image -d in_asm,int,cpu -no-reboot

@@ -32,6 +32,7 @@ OFILES=\
 	asm.$O\
 	interrupt.$O\
 	interrupt_s.$O\
+	eia232.$O\
 	syscall.$O\
 	chan.$O\
 	closure.$O\

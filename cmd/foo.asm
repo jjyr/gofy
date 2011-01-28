@@ -34,10 +34,6 @@ print:
 	jc prerror
 	add rsp, 32
 
-	mov rcx, 10000000
-l:
-	loop l
-
 	jmp print
 
 prerror:
