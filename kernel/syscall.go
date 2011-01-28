@@ -15,6 +15,8 @@ const (
 	SYS_OPEN
 	SYS_CLOSE
 	SYS_FORK
+	SYS_SETGS
+	SYS_SBRK
 	NUM_SYSCALLS
 )
 
@@ -31,6 +33,8 @@ var sysent [NUM_SYSCALLS]Syscall = [NUM_SYSCALLS]Syscall {
 	syscall_open,
 	syscall_close,
 	syscall_fork,
+	syscall_setgs,
+	syscall_sbrk,
 }
 
 func (p *Process) string(s,l /* i'm not really stanley lieber */ uint64) string {
@@ -179,4 +183,20 @@ func syscall_fork(p *Process) {
 	flags := *p.stack(0)
 	p.Fork(flags)
 	p.ProcState.ax = 1
+}
+
+func syscall_setgs(p *Process) {
+	if p.IsInvalid(p.ProcState.sp, 010, MEMREAD) {
+		return
+	}
+	p.ProcState.gs = *p.stack(0)
+}
+
+func syscall_sbrk(p *Process) {
+	if p.IsInvalid(p.ProcState.sp, 010, MEMREAD) {
+		return
+	}
+	size := *p.stack(0)
+	p.Allocate(size)
+	p.ProcState.ax = uint64(p.highest)
 }

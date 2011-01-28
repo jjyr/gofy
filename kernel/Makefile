@@ -50,9 +50,10 @@ rundd: image kernel.elf
 
 include $(GOROOT)/src/Make.cmd
 
-initrddata.go: ../cmd/test.asm
-	make -C ../cmd
+.PHONY: initrddata.go
+initrddata.go:
+	make -C ../cmd ../cmd/foo
 	echo package main > $@
 	printf 'var testbinary [%d]byte = [%d]byte{\n' `stat -c %s ../cmd/test` `stat -c %s ../cmd/test` >> $@
-	hexdump -v -e ' /1 "0x%.2x, " "\n"' ../cmd/test >> $@
+	hexdump -v -e ' /1 "0x%.2x, " "\n"' ../cmd/foo >> $@
 	echo '}' >> $@
