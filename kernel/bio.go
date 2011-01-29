@@ -110,6 +110,7 @@ func initbio() {
 	for k := range buffers {
 		buffers[k].Data = blocks[k][:]
 		buffers[k].Done = make(chan bool)
+		buffers[k].Want = make(chan bool)
 		h := (*runtime.SliceHeader)(unsafe.Pointer(&buffers[k].Data))
 		buffers[k].Phys = uint64(h.Data)
 		freebuf <- &buffers[k]

@@ -32,6 +32,8 @@ const (
 	IDECONTROL = 12
 
 	IDEREADSECTORS = 0x20
+	IDEWRITESECTORS = 0x30
+	IDECACHEFLUSH = 0xE7
 	IDEIDENTIFY = 0xEC
 
 	IDEBUSY = 0x80
@@ -45,6 +47,7 @@ const (
 func outb(uint16, uint8)
 func inb(uint16) uint8
 func InPIO(uint16, []byte)
+func OutPIO(uint16, []byte)
 
 func (c *IDEDisk) getRegisterAddr(reg int) uint16 {
 	if reg < 8 {
@@ -161,7 +164,21 @@ func (c *IDEController) handler() {
 			InPIO(disk.getRegisterAddr(IDEDATAPORT), b.Data)
 			b.Done <- true
 		} else {
-			fuck("IDE write not implemented")
+			disk.writeRegister(IDECOMMAND, IDEWRITESECTORS)
+			for disk.readRegister(IDECOMMAND) & IDEBUSY != 0 {
+			}
+			for disk.readRegister(IDECOMMAND) & (IDEDRQ | IDEERR | IDEDF) == 0 {
+			}
+			if disk.readRegister(IDECOMMAND) & (IDEDF | IDEERR) != 0 {
+				b.Error = SimpleError("I/O error")
+				b.Done <- true
+				continue
+			}
+			OutPIO(disk.getRegisterAddr(IDEDATAPORT), b.Data)
+			disk.writeRegister(IDECOMMAND, IDECACHEFLUSH)
+			for disk.readRegister(IDECOMMAND) & IDEBUSY != 0 {
+			}
+			b.Done <- true
 		}
 	}
 }

@@ -291,3 +291,12 @@ TEXT main·InPIO(SB), 7, $0
 	REP
 	INSW
 	RET
+
+TEXT main·OutPIO(SB), 7, $0
+	MOVW port+0(FP), DX
+	MOVQ buf+8(FP), SI
+	MOVQ $256, CX
+	OUTSW
+	DECL CX
+	WORD $0xFA75
+	RET

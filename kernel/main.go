@@ -21,7 +21,7 @@ func fuck(s string) {
 
 
 func main() {
-	runtime.EndCritical()
+//	runtime.EndCritical()
 /*
 	var initp Process
 	initrd := make(Initrd)
@@ -52,5 +52,10 @@ func main() {
 		println(err.String())
 		for {}
 	}
-	println(b.Data[0])
+	b.Data[0] = 42
+	err = b.Write()
+	if err != nil {
+		println(err.String())
+		for {}
+	}
 }
