@@ -11,8 +11,6 @@ enum
 {
 	Wclosed		= 0x0001,	// writer has closed
 	Rclosed		= 0x0002,	// reader has seen close
-	Eincr		= 0x0004,	// increment errors
-	Emax		= 0x0800,	// error limit before throw
 };
 
 typedef	struct	Link	Link;
@@ -76,6 +74,7 @@ struct	Select
 	uint16	tcase;			// total count of scase[]
 	uint16	ncase;			// currently filled scase[]
 	Select*	link;			// for freelist
+	uint16*	order;
 	Scase*	scase[1];		// one per case
 };
 
@@ -84,9 +83,7 @@ static	SudoG*	dequeue(WaitQ*, Hchan*);
 static	void	enqueue(WaitQ*, SudoG*);
 static	SudoG*	allocsg(Hchan*);
 static	void	freesg(Hchan*, SudoG*);
-static	uint32	gcd(uint32, uint32);
-static	uint32	fastrand1(void);
-static	uint32	fastrand2(void);
+static	uint32	fastrandn(uint32);
 static	void	destroychan(Hchan*);
 
 Hchan*
@@ -104,7 +101,7 @@ runtime·makechan_c(Type *elem, int64 hint)
 	}
 
 	c = runtime·mal(sizeof(*c));
-	runtime·addfinalizer(c, (void(*)(void*)) destroychan, 0);
+	runtime·addfinalizer(c, (void (*)(void*)) destroychan, 0);
 
 	c->elemsize = elem->size;
 	c->elemalg = &runtime·algarray[elem->alg];
@@ -150,16 +147,6 @@ runtime·makechan(Type *elem, int64 hint, Hchan *ret)
 {
 	ret = runtime·makechan_c(elem, hint);
 	FLUSH(&ret);
-}
-
-static void
-incerr(Hchan* c)
-{
-	c->closed += Eincr;
-	if(c->closed & Emax) {
-		// Note that channel locks may still be held at this point.
-		runtime·throw("too many operations on a closed channel");
-	}
 }
 
 /*
@@ -277,14 +264,12 @@ asynch:
 	return;
 
 closed:
-	incerr(c);
-	if(pres != nil)
-		*pres = true;
 	runtime·unlock(c);
+	runtime·panicstring("send on closed channel");
 }
 
 void
-runtime·chanrecv(Hchan* c, byte *ep, bool* pres)
+runtime·chanrecv(Hchan* c, byte *ep, bool *pres, bool *closed)
 {
 	SudoG *sg;
 	G *gp;
@@ -299,6 +284,9 @@ runtime·chanrecv(Hchan* c, byte *ep, bool* pres)
 		runtime·printf("chanrecv: chan=%p\n", c);
 
 	runtime·lock(c);
+	if(closed != nil)
+		*closed = false;
+
 loop:
 	if(c->dataqsiz > 0)
 		goto asynch;
@@ -387,9 +375,10 @@ asynch:
 	return;
 
 closed:
+	if(closed != nil)
+		*closed = true;
 	c->elemalg->copy(c->elemsize, ep, nil);
 	c->closed |= Rclosed;
-	incerr(c);
 	if(pres != nil)
 		*pres = true;
 	runtime·unlock(c);
@@ -441,7 +430,7 @@ runtime·chanrecv1(Hchan* c, ...)
 	o = runtime·rnd(sizeof(c), Structrnd);
 	ae = (byte*)&c + o;
 
-	runtime·chanrecv(c, ae, nil);
+	runtime·chanrecv(c, ae, nil, nil);
 }
 
 // chanrecv2(hchan *chan any) (elem any, pres bool);
@@ -457,7 +446,23 @@ runtime·chanrecv2(Hchan* c, ...)
 	o = runtime·rnd(o+c->elemsize, 1);
 	ap = (byte*)&c + o;
 
-	runtime·chanrecv(c, ae, ap);
+	runtime·chanrecv(c, ae, ap, nil);
+}
+
+// chanrecv3(hchan *chan any) (elem any, closed bool);
+#pragma textflag 7
+void
+runtime·chanrecv3(Hchan* c, ...)
+{
+	int32 o;
+	byte *ae, *ac;
+
+	o = runtime·rnd(sizeof(c), Structrnd);
+	ae = (byte*)&c + o;
+	o = runtime·rnd(o+c->elemsize, 1);
+	ac = (byte*)&c + o;
+
+	runtime·chanrecv(c, ae, nil, ac);
 }
 
 // newselect(size uint32) (sel *byte);
@@ -475,10 +480,11 @@ runtime·newselect(int32 size, ...)
 	if(size > 1)
 		n = size-1;
 
-	sel = runtime·mal(sizeof(*sel) + n*sizeof(sel->scase[0]));
+	sel = runtime·mal(sizeof(*sel) + n*sizeof(sel->scase[0]) + size*sizeof(sel->order[0]));
 
 	sel->tcase = size;
 	sel->ncase = 0;
+	sel->order = (void*)(sel->scase + size);
 	*selp = sel;
 	if(debug)
 		runtime·printf("newselect s=%p size=%d\n", sel, size);
@@ -629,7 +635,7 @@ selunlock(Select *sel)
 void
 runtime·selectgo(Select *sel)
 {
-	uint32 p, o, i, j;
+	uint32 o, i, j;
 	Scase *cas, *dfl;
 	Hchan *c;
 	SudoG *sg;
@@ -650,20 +656,15 @@ runtime·selectgo(Select *sel)
 		// TODO: make special case of one.
 	}
 
-	// select a (relative) prime
-	for(i=0;; i++) {
-		p = fastrand1();
-		if(gcd(p, sel->ncase) == 1)
-			break;
-		if(i > 1000)
-			runtime·throw("select: failed to select prime");
+	// generate permuted order
+	for(i=0; i<sel->ncase; i++)
+		sel->order[i] = i;
+	for(i=1; i<sel->ncase; i++) {
+		o = sel->order[i];
+		j = fastrandn(i+1);
+		sel->order[i] = sel->order[j];
+		sel->order[j] = o;
 	}
-
-	// select an initial offset
-	o = fastrand2();
-
-	p %= sel->ncase;
-	o %= sel->ncase;
 
 	// sort the cases by Hchan address to get the locking order.
 	for(i=1; i<sel->ncase; i++) {
@@ -672,13 +673,13 @@ runtime·selectgo(Select *sel)
 			sel->scase[j] = sel->scase[j-1];
 		sel->scase[j] = cas;
 	}
-
 	sellock(sel);
 
 loop:
 	// pass 1 - look for something already waiting
 	dfl = nil;
 	for(i=0; i<sel->ncase; i++) {
+		o = sel->order[i];
 		cas = sel->scase[o];
 		c = cas->chan;
 
@@ -713,10 +714,6 @@ loop:
 			dfl = cas;
 			break;
 		}
-
-		o += p;
-		if(o >= sel->ncase)
-			o -= sel->ncase;
 	}
 
 	if(dfl != nil) {
@@ -727,6 +724,7 @@ loop:
 
 	// pass 2 - enqueue on all chans
 	for(i=0; i<sel->ncase; i++) {
+		o = sel->order[i];
 		cas = sel->scase[o];
 		c = cas->chan;
 		sg = allocsg(c);
@@ -756,10 +754,6 @@ loop:
 			enqueue(&c->sendq, sg);
 			break;
 		}
-
-		o += p;
-		if(o >= sel->ncase)
-			o -= sel->ncase;
 	}
 
 	g->param = nil;
@@ -773,18 +767,14 @@ loop:
 	// pass 3 - dequeue from unsuccessful chans
 	// otherwise they stack up on quiet channels
 	for(i=0; i<sel->ncase; i++) {
-		if(sg == nil || o != sg->offset) {
-			cas = sel->scase[o];
+		if(sg == nil || i != sg->offset) {
+			cas = sel->scase[i];
 			c = cas->chan;
 			if(cas->send)
 				dequeueg(&c->sendq, c);
 			else
 				dequeueg(&c->recvq, c);
 		}
-		
-		o += p;
-		if(o >= sel->ncase)
-			o -= sel->ncase;
 	}
 
 	if(sg == nil)
@@ -858,7 +848,6 @@ rclose:
 	if(cas->u.elemp != nil)
 		c->elemalg->copy(c->elemsize, cas->u.elemp, nil);
 	c->closed |= Rclosed;
-	incerr(c);
 	goto retc;
 
 syncsend:
@@ -871,12 +860,6 @@ syncsend:
 	gp = sg->g;
 	gp->param = sg;
 	runtime·ready(gp);
-	goto retc;
-
-sclose:
-	// send on closed channel
-	incerr(c);
-	goto retc;
 
 retc:
 	selunlock(sel);
@@ -886,6 +869,12 @@ retc:
 	as = (byte*)&sel + cas->so;
 	freesel(sel);
 	*as = true;
+	return;
+
+sclose:
+	// send on closed channel
+	selunlock(sel);
+	runtime·panicstring("send on closed channel");
 }
 
 // closechan(sel *byte);
@@ -899,7 +888,11 @@ runtime·closechan(Hchan *c)
 		runtime·gosched();
 
 	runtime·lock(c);
-	incerr(c);
+	if(c->closed & Wclosed) {
+		runtime·unlock(c);
+		runtime·panicstring("close of closed channel");
+	}
+
 	c->closed |= Wclosed;
 
 	// release all readers
@@ -1039,22 +1032,6 @@ freesg(Hchan *c, SudoG *sg)
 }
 
 static uint32
-gcd(uint32 u, uint32 v)
-{
-	for(;;) {
-		if(u > v) {
-			if(v == 0)
-				return u;
-			u = u%v;
-			continue;
-		}
-		if(u == 0)
-			return v;
-		v = v%u;
-	}
-}
-
-static uint32
 fastrand1(void)
 {
 	static uint32 x = 0x49f6428aUL;
@@ -1066,12 +1043,19 @@ fastrand1(void)
 }
 
 static uint32
-fastrand2(void)
+fastrandn(uint32 n)
 {
-	static uint32 x = 0x49f6428aUL;
+	uint32 max, r;
 
-	x += x;
-	if(x & 0x80000000L)
-		x ^= 0xfafd871bUL;
-	return x;
+	if(n <= 1)
+		return 0;
+
+	r = fastrand1();
+	if(r < (1ULL<<31)-n)  // avoid computing max in common case
+		return r%n;
+
+	max = (1ULL<<31)/n * n;
+	while(r >= max)
+		r = fastrand1();
+	return r%n;
 }

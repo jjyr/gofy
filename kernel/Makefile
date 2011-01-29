@@ -13,6 +13,10 @@ GOFILES=\
 	user.go\
 	initrddata.go\
 	syscall.go\
+	bio.go\
+	pci.go\
+	ide.go\
+	binary.go\
 
 LD+= -H 2 -T0x100028 
 CFLAGS+= -FVw 

@@ -182,3 +182,8 @@ func BeginCritical()
 func EndCritical()
 func GetGSBase() uint64
 func SetLocalCR3(uint64)
+
+func memclr(uintptr, uint64)
+func Memclr(a uintptr, b uint64) {
+	memclr(a,b)
+}

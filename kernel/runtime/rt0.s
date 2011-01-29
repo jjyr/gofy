@@ -165,15 +165,34 @@ TEXT runtime·settls(SB), 7, $0
 TEXT runtime·signame(SB), 7, $0
 	HLT
 
+TEXT main·outb(SB), 7, $0
 TEXT runtime·outb(SB), 7, $0
 	MOVB data+2(FP), AX
 	MOVW addr+0(FP), DX
-	BYTE $0xEE
+	OUTB
 	RET
 
 TEXT runtime·inb(SB), 7, $0
 	MOVW addr+0(FP), DX
-	BYTE $0xEC
+	INB
+	RET
+
+TEXT main·inb(SB), 7, $0
+	MOVW addr+0(FP), DX
+	INB
+	MOVB AX, data+8(FP)
+	RET
+
+TEXT main·outl(SB), 7, $0
+	MOVL data+4(FP), AX
+	MOVW addr+0(FP), DX
+	OUTL
+	RET
+
+TEXT main·inl(SB), 7, $0
+	MOVW addr+0(FP), DX
+	INL
+	MOVL AX, data+8(FP)
 	RET
 
 TEXT runtime·SetCR3(SB), 7, $0
@@ -205,7 +224,7 @@ TEXT runtime·Halt(SB), 7, $0
 
 TEXT main·GoUser(SB), 7, $40
 	CLI
-	MOVL SP, tss+4(SB)
+	MOVQ SP, tss+4(SB)
 	// set GS
 	SWAPGS
 	MOVL $GSBASE, CX
@@ -262,4 +281,13 @@ TEXT runtime·getTSSSP(SB), 7, $0
 TEXT runtime·setTSSSP(SB), 7, $0
 	MOVQ val+0(FP), AX
 	MOVQ AX, tss+4(SB)
+	RET
+
+TEXT main·InPIO(SB), 7, $0
+	MOVW port+0(FP), DX
+	MOVQ buf+8(FP), DI
+	MOVL $256, CX
+	CLD
+	REP
+	INSW
 	RET

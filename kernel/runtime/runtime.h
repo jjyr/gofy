@@ -584,7 +584,7 @@ Hmap*	runtime·makemap_c(Type*, Type*, int64);
 
 Hchan*	runtime·makechan_c(Type*, int64);
 void	runtime·chansend(Hchan*, byte*, bool*);
-void	runtime·chanrecv(Hchan*, byte*, bool*);
+void	runtime·chanrecv(Hchan*, byte*, bool*, bool*);
 void	runtime·chanclose(Hchan*);
 bool	runtime·chanclosed(Hchan*);
 int32	runtime·chanlen(Hchan*);

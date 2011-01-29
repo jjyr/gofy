@@ -21,8 +21,9 @@ func fuck(s string) {
 
 
 func main() {
-	var initp Process
 	runtime.EndCritical()
+/*
+	var initp Process
 	initrd := make(Initrd)
 	initrd["hello"] = testbinary[:]
 	initrd["hello.txt"] = ([]byte)("Hello, World")[:]
@@ -42,4 +43,14 @@ func main() {
 	initp.ns = rootns
 	initp.ProcState.flags = 0x200
 	initp.Run()
+*/
+	initpci()
+	initbio()
+	c := initide()
+	b, err := BRead(&c.D[0], 0)
+	if err != nil {
+		println(err.String())
+		for {}
+	}
+	println(b.Data[0])
 }

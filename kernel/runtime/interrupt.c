@@ -118,6 +118,13 @@ int_kb(IntState st)
 	resetpic(st.no);
 }
 
+#pragma textflag 7
+static void
+int_ide(IntState st)
+{
+	resetpic(st.no);
+}
+
 void
 runtime·initinterrupts(void)
 {
@@ -153,6 +160,8 @@ runtime·initinterrupts(void)
 	isr[0x0E] = int_pagefault;
 	isr[0x20] = int_timer;
 	isr[0x21] = int_kb;
+	isr[0x2E] = int_ide;
+	isr[0x2F] = int_ide;
         runtime·outb(0x20, 0x11);
         runtime·outb(0xA0, 0x11);
         runtime·outb(0x21, 0x20);

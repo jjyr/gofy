@@ -37,14 +37,6 @@ type Process struct {
 func GoUser(ProcState)
 func SetProc(*Process)
 
-func LE32(b []byte) (r uint32) {
-	r |= uint32(b[0]) << 24
-	r |= uint32(b[1]) << 16
-	r |= uint32(b[2]) << 8
-	r |= uint32(b[3])
-	return
-}
-
 func pageroundup(p uint64) uint64 {
 	return (p + PAGESIZE - 1) & ANTIPAGE
 }
@@ -78,9 +70,11 @@ func Write64(n uintptr, v uint64) {
 func (p *Process) NewPML4() {
 	p.PML4 = p.KAllocate(1)
 	_pml := runtime.MapTmp(p.PML4)
+	runtime.Memclr(_pml, PAGESIZE)
 	pdp := p.KAllocate(1)
 	Write64(_pml, pdp | PAGEAVAIL | PAGEWRITE | PAGEUSER)
 	_pdp := runtime.MapTmp(pdp)
+	runtime.Memclr(_pdp, PAGESIZE)
 	Write64(_pdp, runtime.KernelPD | PAGEAVAIL | PAGEWRITE | PAGEUSER)
 	runtime.FreeTmp(_pdp)
 	runtime.FreeTmp(_pml)
@@ -97,13 +91,13 @@ func (p *Process) Exec(f File) Error {
 	if err != nil {
 		return err
 	}
-	magic := LE32(header[:])
+	magic := BE32(header[:])
 	if magic != AOUTMAGIC {
 		return SimpleError("invalid executable")
 	}
-	textsize := uint64(LE32(header[4:]))
-	datasize := uint64(LE32(header[8:]))
-	bsssize := uint64(LE32(header[12:]))
+	textsize := uint64(BE32(header[4:]))
+	datasize := uint64(BE32(header[8:]))
+	bsssize := uint64(BE32(header[12:]))
 	procsize := pageroundup(textsize+40) + datasize + bsssize
 
 	p.CleanUp()
@@ -125,7 +119,8 @@ func (p *Process) Exec(f File) Error {
 		off += n
 		v += uintptr(n)
 	}
-	p.ProcState.ip = uint64(LE32(header[20:]))
+	runtime.Memclr(v, bsssize)
+	p.ProcState.ip = uint64(BE32(header[20:]))
 	return nil
 }
 
