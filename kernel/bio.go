@@ -37,13 +37,13 @@ var (
 )
 
 func (b *Buf) Release() {
-	for b.Want <- true {
-	}
 	if b.Error != nil {
 		b.BlockDevice = nil
 	}
 	b.Flags &= ^(BBUSY | BASYNC)
 	freebuf <- b
+	for b.Want <- true {
+	}
 }
 
 func BRead(d BlockDevice, b uint64) (buf *Buf, err Error) {
@@ -58,19 +58,30 @@ func BRead(d BlockDevice, b uint64) (buf *Buf, err Error) {
 	return buf, buf.Error
 }
 
-func (b *Buf) Write() (err Error) {
+func (b *Buf) WaitAndRelease() {
+	<- b.Done
+	b.Release()
+}
+
+func (b *Buf) Write() Error {
 	b.Flags &= ^(BREAD | BDONE | BDELWRI)
 	b.Error = nil
 	b.Count = BUFSIZE
 	b.BlockDevice.DoEet(b)
 	if b.Flags & BASYNC == 0 {
 		<- b.Done
-		err = b.Error
 		b.Release()
-		return
+		return b.Error
 	}
+	go b.WaitAndRelease()
 	return nil
 }
+
+func (b *Buf) DWrite() {
+	b.Flags |= BDELWRI | BDONE
+	b.Release()
+}
+
 
 func GetBuf(d BlockDevice, b uint64) (buf *Buf) {
 again:
