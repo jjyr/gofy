@@ -137,3 +137,26 @@ func NewBIO(dev BlockDevice, N int, BSize uint64) (bio *BIO) {
 	}
 	return
 }
+
+// This produces (pseudo-) buffers for actually unbuffered I/O
+// DON'T use those with the buffer functions, use DoEet
+// DON'T use it in a large scale
+// You have been warned
+func MakeBuf(size uint64, dev BlockDevice) (b *Buf) {
+	b = new(Buf)
+	b.Done = make(chan bool)
+	virt, phys := runtime.AlignAlloc(size)
+	h := (*runtime.SliceHeader)(unsafe.Pointer(&b.Data))
+	h.Data, b.Phys = virt, phys
+	h.Len, h.Cap = int(size), int(size)
+	b.BIO = new(BIO)
+	b.BIO.BlockDevice = dev
+	return
+}
+
+// This is for use with unbuffered buffers made by MakeBuf
+// FIXME: this function does not free virtual memory
+func (b *Buf) Free() {
+	n := uint64((len(b.Data) + PAGESIZE - 1) / PAGESIZE)
+	runtime.Ffree(b.Phys, n)
+}

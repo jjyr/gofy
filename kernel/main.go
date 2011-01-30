@@ -46,15 +46,10 @@ func main() {
 */
 	initpci()
 	c := initide()
-	bio := NewBIO(&c.D[0], 100, 4096)
-	b, err := bio.Read(0)
+	p, err := ReadMBR(&c.D[0])
 	if err != nil {
 		println(err.String())
 		for {}
 	}
-	err = b.Write()
-	if err != nil {
-		println(err.String())
-		for {}
-	}
+//	bio := NewBIO(&c.D[0], 100, 4096)
 }

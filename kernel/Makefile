@@ -17,6 +17,7 @@ GOFILES=\
 	pci.go\
 	ide.go\
 	binary.go\
+	partition.go\
 
 LD+= -H 2 -T0x100028 
 CFLAGS+= -FVw 

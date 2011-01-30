@@ -15,7 +15,6 @@ _start:
 	cli
 	xor bx, bx
 	mov ds, bx
-	mov es, bx
 	mov ss, bx
 	mov sp, 0x7C00
 	push loop
@@ -25,17 +24,6 @@ a20:
 	in al, 0x92
 	or al, 0x02
 	out 0x92, al
-
-checkext:
-	mov ah, 0x41
-	mov bx, 0xAA55
-	mov dl, 0x80
-	int 0x13
-	jc exterror
-	cmp bx, 0xAA55
-	jnz exterror
-	cmp ah, 0x30
-	jl exterror
 
         mov bx, memmap/0x10
         mov es, bx
@@ -61,7 +49,6 @@ e820loop:
 e820end:
 	xor bx, bx
 	mov es, bx
-
 
 readheader:
 	mov byte [bno], 1
@@ -91,11 +78,20 @@ readin:
 .go:
 	mov [bno], cl
 	call readblock
-	push word copy
-	push word 0
-	call protected
 
+protected:
+	lgdt [gdt]
+	mov eax, cr0
+	or al, 1
+	mov cr0, eax
+	jmp 8:.here
 bits 32
+.here:
+	mov bx, 16
+	mov ds, bx
+	mov es, bx
+	mov ss, bx
+
 copy:
 	mov edi, [target]
 	mov esi, buf
@@ -107,9 +103,23 @@ copy:
 	adc dword [src+4], 0
 	sub dword [count], ecx
 	jle bootit
-	push word readin
-	jmp realmode
 
+realmode:
+	jmp 24:.here2
+bits 16
+.here2:
+	mov eax, cr0
+	and eax, ~1
+	mov cr0, eax
+	jmp 0:.here3
+.here3:
+	xor bx, bx
+	mov ds, bx
+	mov es, bx
+	mov ss, bx
+	jmp readin
+
+bits 32
 bootit:
 	mov eax, [header+0x14]
 	bswap eax
@@ -129,9 +139,6 @@ readblock:
 
 loop:
 	jmp $
-exterror:
-	mov al, 'E'
-	jmp putchr
 ioerror:
 	xchg al, ah
 	add al, '0'
@@ -150,50 +157,20 @@ putchr:
 	int 0x10
 	ret
 
-protected:
-	lgdt [gdtptr]
-	mov eax, cr0
-	or eax, 1
-	mov cr0, eax
-	jmp 8:.here
-bits 32
-.here:
-	mov ebx, 16
-	mov ds, bx
-	mov es, bx
-	mov ss, bx
-	ret
-
-realmode:
-	jmp 24:.here2
-bits 16
-.here2:
-	mov eax, cr0
-	and eax, ~1
-	mov cr0, eax
-	jmp 0:.here3
-.here3:
-	xor bx, bx
-	mov ds, bx
-	mov es, bx
-	mov ss, bx
-	ret
 
 target:
 	dd 0x100000
 
 gdt:
-	dq 0
+	dw 32
+	dd gdt
+	dw 0
 	dd 0xFFFF
 	dd (0xF<<16) | (1<<15) | (1<<12) | (1<<11) | (1<<22) | (1<<23)
 	dd 0xFFFF
 	dd (0xF<<16) | (1<<15) | (1<<12) | (1<<9) | (1<<23)
 	dd 0xFFFF
 	dd (0xF<<16) | (1<<15) | (1<<12) | (1<<11) | (1<<23)
-
-gdtptr:
-	dw 32
-	dd gdt
 
 packet:
 	dw 0x10
@@ -204,5 +181,9 @@ dst:
 src:
 	dq lba
 
+times 446-($-$$) db 0
+db 0x80, 0, 1, 0, 0x83, 5, 0x91, 0x67
+dd 1
+dd 62729
 times 510-($-$$) db 0
 dw 0xAA55
