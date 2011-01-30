@@ -438,3 +438,18 @@ runtime·SysAlloc(uintptr n)
 	runtime·memclr(virt, n * PAGESIZE);
 	return virt;
 }
+
+#pragma textflag 7
+void
+runtime·AlignAlloc(uintptr n, void* virt, uintptr phys)
+{
+	virt = (void*) runtime·highest;
+	n = (n + PAGESIZE - 1) / PAGESIZE;
+	phys = falloc(n);
+	runtime·highest += n * PAGESIZE;
+	runtime·MapMem((uint64) pml4, phys, virt, n, 0);
+	runtime·FlushTLB();
+	runtime·memclr(virt, n * PAGESIZE);
+	FLUSH(&virt);
+	FLUSH(&phys);
+}

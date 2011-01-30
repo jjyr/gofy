@@ -1,5 +1,7 @@
 package main
 
+import "runtime"
+
 type IDEDisk struct {
 	*IDEController
 	N int
@@ -42,6 +44,8 @@ const (
 	IDEERR = 1
 
 	IDELBA48 = 1<<26
+
+	IDEBLOCKSIZE = 512
 )
 
 func outb(uint16, uint8)
@@ -133,26 +137,28 @@ func (c *IDEDisk) identify(i int) bool {
 
 func (c *IDEController) handler() {
 	for b := range c.Handler {
-		disk := b.BlockDevice.(*IDEDisk)
+		disk := b.BIO.BlockDevice.(*IDEDisk)
 		if !disk.Avail {
 			b.Error = SimpleError("no such drive")
 			b.Done <- true
 			continue
 		}
-		if b.Block >= disk.MaxLBA {
+		if b.Block >= disk.MaxLBA || b.Block >= (1<<28) { // LBA48 not implemented
 			b.Error = SimpleError("no such block")
 			b.Done <- true
 			continue
 		}
+		block := b.Block * b.BIO.BSize / IDEBLOCKSIZE
 		disk.activate()
-		disk.writeRegister(IDEDRIVE, 0xE0 | uint8((disk.N & 1) << 4) | uint8((b.Block >> 24) & 0xF))
-		disk.writeRegister(IDECOUNT, 1)
-		disk.writeRegister(IDELBA0, uint8(b.Block))
-		disk.writeRegister(IDELBA1, uint8(b.Block >> 8))
-		disk.writeRegister(IDELBA2, uint8(b.Block >> 16))
+		disk.writeRegister(IDEDRIVE, 0xE0 | uint8((disk.N & 1) << 4) | uint8((block >> 24) & 0xF))
+		disk.writeRegister(IDECOUNT, uint8(b.BIO.BSize / IDEBLOCKSIZE))
+		disk.writeRegister(IDELBA0, uint8(block))
+		disk.writeRegister(IDELBA1, uint8(block >> 8))
+		disk.writeRegister(IDELBA2, uint8(block >> 16))
 		if b.Flags & BREAD != 0 {
 			disk.writeRegister(IDECOMMAND, IDEREADSECTORS)
 			for disk.readRegister(IDECOMMAND) & IDEBUSY != 0 {
+				runtime.Gosched()
 			}
 			for disk.readRegister(IDECOMMAND) & (IDEDRQ | IDEERR | IDEDF) == 0 {
 			}
@@ -166,6 +172,7 @@ func (c *IDEController) handler() {
 		} else {
 			disk.writeRegister(IDECOMMAND, IDEWRITESECTORS)
 			for disk.readRegister(IDECOMMAND) & IDEBUSY != 0 {
+				runtime.Gosched()
 			}
 			for disk.readRegister(IDECOMMAND) & (IDEDRQ | IDEERR | IDEDF) == 0 {
 			}

@@ -45,14 +45,13 @@ func main() {
 	initp.Run()
 */
 	initpci()
-	initbio()
 	c := initide()
-	b, err := BRead(&c.D[0], 0)
+	bio := NewBIO(&c.D[0], 100, 4096)
+	b, err := bio.Read(0)
 	if err != nil {
 		println(err.String())
 		for {}
 	}
-	b.Data[0] = 42
 	err = b.Write()
 	if err != nil {
 		println(err.String())

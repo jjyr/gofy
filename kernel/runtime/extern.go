@@ -187,3 +187,5 @@ func memclr(uintptr, uint64)
 func Memclr(a uintptr, b uint64) {
 	memclr(a,b)
 }
+
+func AlignAlloc(uint64) (uintptr, uint64)

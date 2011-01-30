@@ -6,9 +6,6 @@ import (
 )
 
 const (
-	NBUF = 100
-	BUFSIZE = 512
-
 	BREAD = 1
 	BDONE = 2
 	BBUSY = 4
@@ -23,38 +20,39 @@ type BlockDevice interface {
 type Buf struct {
 	Flags int
 	Done, Want chan bool
-	BlockDevice
 	Count, Block uint64
 	Data []byte
 	Phys uint64
 	Error
+	*BIO
 }
 
-var (
-	buffers [NBUF]Buf
-	blocks [NBUF][BUFSIZE]byte // by placing this in the bss section, it will be identity mapped. magic.
-	freebuf chan *Buf
-)
+type BIO struct {
+	all []Buf
+	free chan *Buf
+	BlockDevice
+	BSize uint64
+}
 
 func (b *Buf) Release() {
-	if b.Error != nil {
-		b.BlockDevice = nil
-	}
 	b.Flags &= ^(BBUSY | BASYNC)
-	freebuf <- b
+	if !(b.BIO.free <- b) {
+		fuck("BIO free list full") // cleanup code would be more appropriate
+	}
 	for b.Want <- true {
 	}
 }
 
-func BRead(d BlockDevice, b uint64) (buf *Buf, err Error) {
-	buf = GetBuf(d, b)
+func (bio *BIO) Read(b uint64) (buf *Buf, err Error) {
+	buf = bio.GetBuf(b)
 	if buf.Flags & BDONE != 0 {
 		return buf, nil
 	}
 	buf.Flags |= BREAD
-	buf.Count = BUFSIZE
-	d.DoEet(buf)
+	buf.Count = bio.BSize
+	bio.BlockDevice.DoEet(buf)
 	<- buf.Done
+	buf.Flags |= BDONE
 	return buf, buf.Error
 }
 
@@ -66,8 +64,8 @@ func (b *Buf) WaitAndRelease() {
 func (b *Buf) Write() Error {
 	b.Flags &= ^(BREAD | BDONE | BDELWRI)
 	b.Error = nil
-	b.Count = BUFSIZE
-	b.BlockDevice.DoEet(b)
+	b.Count = b.BSize
+	b.BIO.BlockDevice.DoEet(b)
 	if b.Flags & BASYNC == 0 {
 		<- b.Done
 		b.Release()
@@ -83,24 +81,22 @@ func (b *Buf) DWrite() {
 }
 
 
-func GetBuf(d BlockDevice, b uint64) (buf *Buf) {
+func (bio *BIO) GetBuf(b uint64) (buf *Buf) {
 again:
-	if d != nil {
-		for k := range buffers {
-			if buffers[k].BlockDevice != d || buffers[k].Block != b {
-				continue
-			}
-			buf = &buffers[k]
-			if buf.Flags & BBUSY != 0 {
-				<- buf.Want
-				goto again
-			}
-			buf.Flags |= BBUSY
-			return
+	for k := range bio.all {
+		if bio.all[k].Block != b {
+			continue
 		}
+		buf = &bio.all[k]
+		if buf.Flags & BBUSY != 0 {
+			<- buf.Want
+			goto again
+		}
+		buf.Flags |= BBUSY
+		return
 	}
 next:
-	buf = <- freebuf
+	buf = <- bio.free 
 	if buf.Flags & BBUSY != 0 {
 		goto next
 	}
@@ -110,20 +106,34 @@ next:
 		goto again
 	}
 	buf.Flags = BBUSY
-	buf.BlockDevice = d
 	buf.Block = b
 	buf.Error = nil
 	return
 }
 
-func initbio() {
-	freebuf = make(chan *Buf, NBUF)
-	for k := range buffers {
-		buffers[k].Data = blocks[k][:]
-		buffers[k].Done = make(chan bool)
-		buffers[k].Want = make(chan bool)
-		h := (*runtime.SliceHeader)(unsafe.Pointer(&buffers[k].Data))
-		buffers[k].Phys = uint64(h.Data)
-		freebuf <- &buffers[k]
+func NewBIO(dev BlockDevice, N int, BSize uint64) (bio *BIO) {
+	if (PAGESIZE % BSize) != 0 {
+		fuck("BIO with non-divisors of the PAGESIZE not implemented")
 	}
+	bio = new(BIO)
+	bio.BSize = BSize
+	bio.BlockDevice = dev
+	bio.free = make(chan *Buf, N)
+	bio.all = make([]Buf, N)
+	virt, phys := runtime.AlignAlloc(uint64(N) * BSize)
+	for k := range bio.all {
+		h := (*runtime.SliceHeader)(unsafe.Pointer(&bio.all[k].Data))
+		h.Data, bio.all[k].Phys = virt, phys
+		virt += uintptr(BSize)
+		phys += BSize
+		h.Len = int(BSize)
+		h.Cap = int(BSize)
+
+		bio.all[k].Done = make(chan bool)
+		bio.all[k].Want = make(chan bool)
+		bio.all[k].BIO = bio
+		bio.all[k].Block = ^uint64(0)
+		bio.free <- &bio.all[k]
+	}
+	return
 }

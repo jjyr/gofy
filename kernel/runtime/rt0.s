@@ -286,7 +286,8 @@ TEXT runtime·setTSSSP(SB), 7, $0
 TEXT main·InPIO(SB), 7, $0
 	MOVW port+0(FP), DX
 	MOVQ buf+8(FP), DI
-	MOVL $256, CX
+	MOVL len+16(FP), CX
+	SHRQ $1, CX
 	CLD
 	REP
 	INSW
@@ -295,7 +296,8 @@ TEXT main·InPIO(SB), 7, $0
 TEXT main·OutPIO(SB), 7, $0
 	MOVW port+0(FP), DX
 	MOVQ buf+8(FP), SI
-	MOVQ $256, CX
+	MOVL len+16(FP), CX
+	SHRQ $1, CX
 	OUTSW
 	DECL CX
 	WORD $0xFA75
