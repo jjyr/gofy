@@ -2,11 +2,12 @@ package main
 
 type Partition struct {
 	Start, End uint64
+	BlockDevice
 }
 
-func (p *Partition) Block(b uint64) (uint64, Error) {
+func (p Partition) Block(b uint64) (uint64, Error) {
 	if b > p.End {
-		return 0, SimpleError("no such block")
+		return 0, NoSuchBlockError
 	}
 	return b + p.Start, nil
 }
@@ -35,7 +36,7 @@ func ReadMBR(b BlockDevice) (ps []Partition, err Error) {
 		if len == 0 {
 			continue
 		}
-		ps = append(ps, Partition{Start: start, End: start + len})
+		ps = append(ps, Partition{Start: start, End: start + len, BlockDevice: b})
 	}
 	return ps, nil
 }

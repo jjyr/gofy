@@ -48,8 +48,11 @@ func main() {
 	c := initide()
 	p, err := ReadMBR(&c.D[0])
 	if err != nil {
-		println(err.String())
-		for {}
+		fuck(err.String())
 	}
-//	bio := NewBIO(&c.D[0], 100, 4096)
+	fs, err := InitExt2(p[0])
+	if err != nil {
+		fuck(err.String())
+	}
+	_ = fs
 }

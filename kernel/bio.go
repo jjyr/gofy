@@ -13,6 +13,8 @@ const (
 	BASYNC = 16
 )
 
+type BlockMapper func(uint64) (uint64, Error)
+
 type BlockDevice interface {
 	DoEet(*Buf)
 }
@@ -31,15 +33,23 @@ type BIO struct {
 	all []Buf
 	free chan *Buf
 	BlockDevice
+	BlockMapper
 	BSize uint64
 }
 
 func (b *Buf) Release() {
 	b.Flags &= ^(BBUSY | BASYNC)
-	if !(b.BIO.free <- b) {
+	select {
+	case b.BIO.free <- b:
+	default:
 		fuck("BIO free list full") // cleanup code would be more appropriate
 	}
-	for b.Want <- true {
+	for {
+		select {
+		case b.Want <- true:
+		default:
+			return
+		}
 	}
 }
 

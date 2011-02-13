@@ -33,4 +33,3 @@ func BE32(b []byte) (r uint32) {
 	r |= uint32(b[3])
 	return
 }
-

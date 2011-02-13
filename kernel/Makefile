@@ -11,13 +11,13 @@ GOFILES=\
 	file.go\
 	initrd.go\
 	user.go\
-	initrddata.go\
 	syscall.go\
 	bio.go\
 	pci.go\
 	ide.go\
 	binary.go\
 	partition.go\
+	ext2.go\
 
 LD+= -H 2 -T0x100028 
 CFLAGS+= -FVw 
@@ -31,9 +31,18 @@ kernel.elf: _go_.6
 kernel.sym: kernel.elf
 	$(NM) kernel.elf | grep " T " | awk '{ print $$1 " " $$3 }' > kernel.sym
 
-image: boot kernel
-	cat boot kernel > image
-	dd if=/dev/zero of=image seek=62730 count=0 2>/dev/null
+fs: ../cmd/foo ../cmd/test
+	dd if=/dev/zero of=fs seek=54537 count=0 2>/dev/null
+	mke2fs -q -t ext2 -F fs
+	echo -e "\
+	mkdir /bin\n\
+	write ../cmd/foo /bin/foo\n\
+	write ../cmd/test /bin/test\n\
+	" | debugfs -w fs
+
+image: boot kernel fs
+	dd if=/dev/zero of=kernel seek=8192 count=0 2>/dev/null
+	cat boot kernel fs > image
 
 boot: boot.asm
 	nasm -f bin $< -o $@

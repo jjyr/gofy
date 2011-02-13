@@ -46,6 +46,10 @@ const (
 	IDELBA48 = 1<<26
 
 	IDEBLOCKSIZE = 512
+
+	NoSuchDriveError SimpleError = "No such drive"
+	NoSuchBlockError SimpleError = "No such block"
+	IOError SimpleError = "I/O error"
 )
 
 func outb(uint16, uint8)
@@ -102,6 +106,9 @@ func (c *IDEDisk) identify(i int) bool {
 	if c.readRegister(IDECOMMAND) == 0 {
 		return false
 	}
+/*	if c.readRegister(IDECOMMAND) == 0xFF {
+		return false
+	}*/
 	for c.readRegister(IDECOMMAND) & IDEBUSY != 0 {
 	}
 	if c.readRegister(IDELBA0) != 0 && c.readRegister(IDELBA2) != 0 {
@@ -136,19 +143,31 @@ func (c *IDEDisk) identify(i int) bool {
 }
 
 func (c *IDEController) handler() {
+	var block uint64
+
 	for b := range c.Handler {
-		disk := b.BIO.BlockDevice.(*IDEDisk)
+		disk, ok := b.BIO.BlockDevice.(*IDEDisk)
+		b.Error = nil
+		if !ok {
+			b.Error = SimpleError("block with improper device passed to IDE driver")
+			goto done
+		}
 		if !disk.Avail {
-			b.Error = SimpleError("no such drive")
-			b.Done <- true
-			continue
+			b.Error = NoSuchDriveError
+			goto done
 		}
 		if b.Block >= disk.MaxLBA || b.Block >= (1<<28) { // LBA48 not implemented
-			b.Error = SimpleError("no such block")
-			b.Done <- true
-			continue
+			b.Error = NoSuchBlockError
+			goto done
 		}
-		block := b.Block * b.BIO.BSize / IDEBLOCKSIZE
+		if b.BlockMapper != nil {
+			block, b.Error = b.BlockMapper(b.Block)
+			if b.Error != nil {
+				goto done
+			}
+		} else {
+			block = b.Block
+		}
 		disk.activate()
 		disk.writeRegister(IDEDRIVE, 0xE0 | uint8((disk.N & 1) << 4) | uint8((block >> 24) & 0xF))
 		disk.writeRegister(IDECOUNT, uint8(b.BIO.BSize / IDEBLOCKSIZE))
@@ -163,12 +182,10 @@ func (c *IDEController) handler() {
 			for disk.readRegister(IDECOMMAND) & (IDEDRQ | IDEERR | IDEDF) == 0 {
 			}
 			if disk.readRegister(IDECOMMAND) & (IDEDF | IDEERR) != 0 {
-				b.Error = SimpleError("I/O error")
-				b.Done <- true
-				continue
+				b.Error = IOError
+				goto done
 			}
 			InPIO(disk.getRegisterAddr(IDEDATAPORT), b.Data)
-			b.Done <- true
 		} else {
 			disk.writeRegister(IDECOMMAND, IDEWRITESECTORS)
 			for disk.readRegister(IDECOMMAND) & IDEBUSY != 0 {
@@ -177,16 +194,16 @@ func (c *IDEController) handler() {
 			for disk.readRegister(IDECOMMAND) & (IDEDRQ | IDEERR | IDEDF) == 0 {
 			}
 			if disk.readRegister(IDECOMMAND) & (IDEDF | IDEERR) != 0 {
-				b.Error = SimpleError("I/O error")
-				b.Done <- true
-				continue
+				b.Error = IOError
+				goto done
 			}
 			OutPIO(disk.getRegisterAddr(IDEDATAPORT), b.Data)
 			disk.writeRegister(IDECOMMAND, IDECACHEFLUSH)
 			for disk.readRegister(IDECOMMAND) & IDEBUSY != 0 {
 			}
-			b.Done <- true
 		}
+	done:
+		b.Done <- true
 	}
 }
 
@@ -213,7 +230,7 @@ found:
 		c.PCIDevice.BAR[3] = 0x374
 	}
 	c.curdrive[0] = -1 // make sure the drive is really activated
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 2; i++ {
 		c.D[i] = IDEDisk{IDEController: c, N: i}
 		if c.D[i].identify(i) {
 			print("ide", i, ": ", c.D[i].Model, ", ", c.D[i].MaxLBA >> 11, " MB \n")
